@@ -1,0 +1,98 @@
+/* Layout Styles */
+.page-container {
+  max-width: 1280px; /* Or your preferred max width */
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.layout-wrapper {
+  display: flex;
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.sidebar-wrapper {
+  background-color: #efefef;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0; /* Prevents sidebar from shrinking */
+}
+
+.main-content-wrapper {
+  background-color: #ffffff;
+  padding: 24px;
+  flex-grow: 1; /* Allows main content to take remaining space */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Sidebar content styles */
+.sidebar {
+  width: 250px; /* Give the sidebar a fixed width */
+}
+
+.sidebar-header {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.sidebar-header h2 {
+  font-size: 20px;
+  font-weight: 500;
+  margin: 0;
+  color: #011d41;
+}
+
+.sidebar-header hr {
+  border-color: #011d41;
+  opacity: 0.2;
+}
+
+.sidebar-menu {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.menu-item {
+  margin-bottom: 15px;
+}
+
+.menu-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  color: #ffffff;
+  padding: 10px 15px;
+  border-radius: 5px;
+  background-color: #011d41;
+  transition: background-color 0.3s ease;
+}
+
+.menu-link:hover {
+  background-color: #a4262c;
+  opacity: 0.9;
+}
+
+/* This new 'active' class will highlight the current page link */
+.menu-link.active {
+  background-color: #a4262c;
+  font-weight: bold;
+}
+
+.menu-link .icon {
+  margin-right: 10px;
+}
+
+/* Responsive */
+@media (max-width: 767px) {
+  .sidebar-wrapper {
+    display: none;
+  }
+  .page-container {
+    padding: 0;
+  }
+}

@@ -1,0 +1,9 @@
+.collapse{
+    visibility: visible;
+}
+button, input, optgroup, select, textarea {
+    margin: revert-layer;
+}
+#root{
+    /* margin-top:-10px; */
+}
