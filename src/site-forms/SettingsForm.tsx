@@ -35,11 +35,13 @@ declare global {
     };
   }
 }
+
 interface ApiResponseData {
   message: string;
   firstName?: string;
   lastName?: string;
   available?: boolean;
+  aptUnit?: string;
   phoneNumber?: string;
   profileImage?: string;
   languages?: string;
@@ -58,6 +60,7 @@ interface ApiResponseData {
   isLawyer?: boolean;
   yearsInPractice?: number;
 }
+
 // Interfaces (Unchanged)
 interface UserFormData {
   firstName: string
@@ -70,7 +73,7 @@ interface UserFormData {
 }
 
 interface MembershipInfo {
-  status: 'active' | 'inactive' | 'pending'
+  status: 'approved' | 'underReview' | 'onboarding' | 'rejected' | 'suspended'
   memberSince: string
   expiryDate: string
   tier: string
@@ -82,6 +85,7 @@ interface BusinessAddress {
   state: string
   zipCode: string
   country: string
+  aptUnit: string
 }
 
 interface LicensingInfo {
@@ -99,10 +103,13 @@ const AVAILABLE_LANGUAGES = [
 ] as const
 
 const STATUS_CONFIG = {
-  active: { color: 'text-white', bgColor: '#a4262c', label: 'Active' },
-  inactive: { color: 'text-white', bgColor: '#011d41', label: 'Inactive' },
-  pending: { color: 'text-white', bgColor: '#a4262c', label: 'Pending' }
-} as const
+  approved: { color: '#ffffff', bgColor: '#4e925d', label: 'Approved' },
+  onboarding: { color: '#ffffff', bgColor: '#a4262c', label: 'Onboarding' },
+  underReview: { color: '#ffffff', bgColor: '#a4262c', label: 'Under Review' },
+  suspended: { color: '#ffffff', bgColor: '#646769', label: 'Suspended' },
+  rejected: { color: '#ffffff', bgColor: '#646769', label: 'Rejected' }
+} as const;
+
 function parseLanguageString(langString: string | null): string[] {
   if (!langString) {
     return [];
@@ -110,6 +117,29 @@ function parseLanguageString(langString: string | null): string[] {
   // Split by semicolon and trim extra whitespace from each language name.
   return langString.split(';').map(lang => lang.trim());
 }
+// This function translates the API status string to the correct type for your component
+function mapApiStatus(apiStatus?: string): MembershipInfo['status'] {
+  if (!apiStatus) return 'underReview'; // Default for missing status
+
+  // Normalize the API string (lowercase, remove spaces) for reliable matching
+  const normalizedStatus = apiStatus.toLowerCase().replace(/\s/g, '');
+
+  switch (normalizedStatus) {
+    case 'approved':
+      return 'approved';
+    case 'underreview':
+      return 'underReview';
+    case 'onboarding':
+      return 'onboarding';
+    case 'rejected':
+      return 'rejected';
+    case 'suspended':
+      return 'suspended';
+    default:
+      return 'underReview'; // Fallback for any unknown status
+  }
+}
+
 function MultiSelect({
   options,
   selected,
@@ -192,26 +222,28 @@ function MultiSelect({
 
 export default function SettingsForm() {
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // RE-ADDED: State for initial data fetching
   const [isFetching, setIsFetching] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // MODIFIED: States are initialized empty to await API data.
+  // FIXED: Added image error state for better error handling
+  const [imageError, setImageError] = useState(false)
+  const [isImageLoading, setIsImageLoading] = useState(false)
+
+  // FIX #1: Use your preferred default avatar path
   const [formData, setFormData] = useState<UserFormData>({
     firstName: '',
     lastName: '',
     phone: '',
-    profileImage: '/placeholder.svg?height=80&width=80',
+    profileImage: '/default-avatar.png', // Back to your preferred default
     available: false,
     languages: [],
     biography: ''
-  })
+  });
 
   // MODIFIED: State setters are re-enabled to accept API data.
   const [membershipInfo, setMembershipInfo] = useState<MembershipInfo>({
-    status: 'pending',
+    status: 'underReview',
     memberSince: '',
     expiryDate: '',
     tier: ''
@@ -222,7 +254,8 @@ export default function SettingsForm() {
     city: '',
     state: '',
     zipCode: '',
-    country: ''
+    country: '',
+    aptUnit: ''
   })
 
   const [licensingInfo, setLicensingInfo] = useState<LicensingInfo>({
@@ -231,30 +264,50 @@ export default function SettingsForm() {
     isLawyer: false,
     yearsInPractice: 0
   })
+
   const { setUser } = useUser(); // Get the setUser function from the context
+
+  // FIXED: Create a fallback avatar component for better UX
+  const FallbackAvatar = ({ size = 80 }: { size?: number }) => (
+    <div
+      className="rounded-full bg-gray-200 flex items-center justify-center border-4 shadow-sm"
+      style={{
+        width: size,
+        height: size,
+        borderColor: '#efefef',
+        backgroundColor: '#f5f5f5'
+      }}
+    >
+      <User className="text-gray-400" style={{ width: size * 0.4, height: size * 0.4 }} />
+    </div>
+  )
 
   useEffect(() => {
     // This helper function populates the form states to avoid repeating code.
     const populateStates = (apiData: ApiResponseData) => {
-      console.log("message:", apiData.message);
+      console.log("DEBUG: Attempting to populate states...");
       if (apiData && apiData.message === 'success') {
+        console.log("DEBUG: API message is 'success'. Proceeding to set states.");
+        let imageUrl = '/default-avatar.png';
+        if (apiData.profileImage && apiData.profileImage.trim() !== '') {
+          imageUrl = apiData.profileImage.startsWith('data:image/') ? apiData.profileImage : `data:image/jpeg;base64,${apiData.profileImage}`;
+        }
         setUser({
           firstName: apiData.firstName ?? '',
-          lastName: apiData.lastName ?? ''
+          lastName: apiData.lastName ?? '',
+          profileImage: imageUrl
         });
-
-        console.log("message:", apiData.message);
         setFormData({
           firstName: apiData.firstName ?? '',
           lastName: apiData.lastName ?? '',
           phone: apiData.phoneNumber ?? '',
-          profileImage: apiData.profileImage ?? '/favicon.ico',
+          profileImage: imageUrl,
           available: apiData.available ?? false,
           languages: parseLanguageString(apiData.languages ?? ''),
           biography: apiData.biography ?? '',
         });
         setMembershipInfo({
-          status: apiData.status === 'Under Review' ? 'pending' : 'inactive',
+          status: mapApiStatus(apiData.status),
           memberSince: apiData.memberSince ?? '',
           expiryDate: apiData.expiryDate ?? '',
           tier: apiData.membership ?? '',
@@ -262,9 +315,10 @@ export default function SettingsForm() {
         setBusinessAddress({
           street: apiData.street ?? '',
           city: apiData.city ?? '',
-          state: apiData.province ?? '', // Note: mapping 'province' to 'state'
+          state: apiData.province ?? '',
           zipCode: apiData.zipCode ?? '',
           country: apiData.country ?? '',
+          aptUnit: apiData.aptUnit ?? ''
         });
         setLicensingInfo({
           licenseNumber: apiData.licenseNumber ?? '',
@@ -272,6 +326,10 @@ export default function SettingsForm() {
           isLawyer: apiData.isLawyer ?? false,
           yearsInPractice: apiData.yearsInPractice ?? 0,
         });
+        setImageError(false);
+        console.log("DEBUG: All states populated successfully.");
+      } else {
+        console.log("DEBUG: populateStates failed. apiData.message was not 'success' or apiData was null. apiData:", apiData);
       }
     };
 
@@ -294,9 +352,7 @@ export default function SettingsForm() {
           }
 
           // Step 2: Call the REAL Power Automate API with the token.
-          // IMPORTANT: This URL is found inside your Power Automate flow trigger,
-          // labeled "HTTP POST URL". It's different from the Power Pages trigger URL.
-          const realFlowUrl = 'https://prod-08.canadacentral.logic.azure.com:443/workflows/d3adf5457a224a6eb69fc1d4d08c27ca/triggers/manual/paths/invoke?api-version=2016-06-01'; // <-- Replace with your actual Flow URL
+          const realFlowUrl = 'https://prod-08.canadacentral.logic.azure.com:443/workflows/d3adf5457a224a6eb69fc1d4d08c27ca/triggers/manual/paths/invoke?api-version=2016-06-01';
 
           const flowResponse = await fetch(realFlowUrl, {
             method: 'POST',
@@ -304,24 +360,42 @@ export default function SettingsForm() {
               'Authorization': `Bearer ${accessToken}`,
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ "userid": "5bd4fe4a-bc54-f011-bec2-000d3af32e79" }) // Send an empty body or required data
+            body: JSON.stringify({ "userid": "5bd4fe4a-bc54-f011-bec2-000d3af32e79" })
+            // body: JSON.stringify({ "userid": "241e9862-1c20-f011-998a-6045bd5dca91" })
           });
 
           const apiData = await flowResponse.json();
           populateStates(apiData);
 
         } else {
-          // --- PRODUCTION (POWER PAGES) PATH ---
-          console.log('Running in Power Pages mode...');
+          console.log("DEBUG: Running in Power Pages mode.");
 
-          if (typeof window.shell === 'undefined') {
-            throw new Error("This form can only be used within a Power Pages site.");
+          if (typeof window.shell === 'undefined' || typeof window.shell.ajaxSafePost === 'undefined') {
+            throw new Error("window.shell.ajaxSafePost is not available. Cannot fetch data.");
           }
+          console.log("DEBUG: window.shell.ajaxSafePost is available.");
+
           const payload = { eventData: JSON.stringify({}) };
           const apiUrl = "/_api/cloudflow/v1.0/trigger/d3a75ec3-9a6c-f011-b4cc-6045bd5dca91";
+          
+          console.log("DEBUG: Calling Power Pages API at:", apiUrl);
           const response = await window.shell.ajaxSafePost({ type: 'POST', url: apiUrl, data: payload });
-          console.log("API Response:", response);
-          const apiData = JSON.parse(response);
+
+          let apiData;
+          // Power Pages might return a string or an object. Handle both cases.
+          if (typeof response === 'string') {
+            try {
+              console.log("DEBUG: Response is a string. Attempting to parse JSON.");
+              apiData = JSON.parse(response);
+            } catch (parseError) {
+              console.error("DEBUG: Failed to parse response string:", parseError);
+              throw new Error("Received an invalid JSON response from the server.");
+            }
+          } else {
+            console.log("DEBUG: Response is an object.");
+            apiData = response;
+          }
+          
           populateStates(apiData);
         }
       } catch (err) {
@@ -334,38 +408,68 @@ export default function SettingsForm() {
 
     fetchData();
   }, [setUser]);
-  // Empty dependency array ensures this runs only once on mount
-  const handleInputChange = useCallback((field: keyof UserFormData, value: string | boolean | string[]) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
-  }, [])
+
+  const handleInputChange = useCallback((field: keyof UserFormData, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  }, []);
 
   const handleLanguageSelectionChange = useCallback((languages: string[]) => {
     handleInputChange('languages', languages)
   }, [handleInputChange])
 
+  // FIXED: Image error handlers
+  const handleImageError = useCallback(() => {
+    setImageError(true);
+    setIsImageLoading(false);
+  }, []);
+
+  const handleImageLoad = useCallback(() => {
+    setImageError(false);
+    setIsImageLoading(false);
+  }, []);
+  const handleBusinessAddressChange = useCallback((field: keyof BusinessAddress, value: string) => {
+    setBusinessAddress(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  }, []);
+
+  // FIX #3: This is the corrected file upload handler with better error handling.
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      if (!file.type.startsWith('image/')) { alert('Please upload an image file.'); return; }
-      if (file.size > 5 * 1024 * 1024) { alert('File size must be less than 5MB.'); return; }
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        handleInputChange('profileImage', e.target?.result as string)
-      }
-      reader.readAsDataURL(file)
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload an image file.');
+      return;
     }
-    if (event.target) event.target.value = '';
-  }, [handleInputChange])
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB.');
+      return;
+    }
 
+    setIsImageLoading(true);
+    setImageError(false);
 
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64String = e.target?.result as string;
+      if (base64String) {
+        // This is the key step: it calls the state update function
+        handleInputChange('profileImage', base64String);
+        setIsImageLoading(false);
+      }
+    };
+    reader.onerror = () => {
+      setImageError(true);
+      setIsImageLoading(false);
+      alert('Error reading file. Please try again.');
+    };
+    reader.readAsDataURL(file);
+  }, [handleInputChange]); // Correct dependency
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (typeof window.shell === 'undefined') {
-      alert('Save cannot be completed. Running in local dev mode.');
-      return;
-    }
 
     if (!formData.firstName || !formData.lastName) {
       alert('First and Last Name are required fields.');
@@ -374,17 +478,71 @@ export default function SettingsForm() {
 
     setIsSaving(true);
     setError(null);
+
+    // Construct the payload based on your API schema
+    const payload = {
+      userid: "5bd4fe4a-bc54-f011-bec2-000d3af32e79", // Placeholder for local dev
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      available: formData.available,
+      phoneNumber: formData.phone,
+      biography: formData.biography,
+      street: businessAddress.street,
+      city: businessAddress.city,
+      zipCode: businessAddress.zipCode,
+      aptUnit: businessAddress.aptUnit
+    };
+
     try {
-      const apiUrl = '/_api/cloudflow/v1.0/trigger/a08edaee-f16a-f011-b4cc-6045bd5dca91';
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Saving in local development mode...');
 
-      // MODIFIED: The payload now correctly sends the entire formData object.
-      const payload = { eventData: JSON.stringify(formData) };
+        const tokenResponse = await fetch('http://localhost:3001/api/get-token', { method: 'POST' });
+        const { accessToken } = await tokenResponse.json();
 
-      await window.shell.ajaxSafePost({
-        type: 'POST',
-        url: apiUrl,
-        data: payload
-      });
+        if (!accessToken) throw new Error("Could not retrieve access token.");
+
+        const saveUrl = 'https://prod-14.canadacentral.logic.azure.com:443/workflows/3d7636f132204b4e9802106a8c265921/triggers/manual/paths/invoke?api-version=2016-06-01';
+
+        await fetch(saveUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+      } else {
+        console.log('Saving in Power Pages mode...');
+        const powerPagesPayloadObject = {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          available: formData.available,
+          phoneNumber: formData.phone,
+          biography: formData.biography,
+          status: membershipInfo.status,
+          street: businessAddress.street,
+          city: businessAddress.city,
+          zipCode: businessAddress.zipCode,
+          aptUnit: businessAddress.aptUnit
+        };
+        if (typeof window.shell === 'undefined') {
+          throw new Error("Cannot save outside of Power Pages.");
+        }
+
+        const apiUrl = '/_api/cloudflow/v1.0/trigger/a08edaee-f16a-f011-b4cc-6045bd5dca91'; // Your production save URL
+
+        // In Power Pages, the payload is wrapped in 'eventData'
+        const powerPagesPayload = { eventData: JSON.stringify(powerPagesPayloadObject) };
+
+        await window.shell.ajaxSafePost({
+          type: 'POST',
+          url: apiUrl,
+          data: powerPagesPayload
+        });
+      }
+
       alert('Settings saved successfully!');
 
     } catch (err) {
@@ -398,7 +556,6 @@ export default function SettingsForm() {
   const biographyCharCount = formData.biography.length
   const maxBiographyLength = 500
 
-  // RE-ADDED: Conditional UI for loading state.
   if (isFetching) {
     return (
       <div className="flex justify-center items-center min-h-screen" style={{ backgroundColor: '#efefef' }}>
@@ -407,7 +564,6 @@ export default function SettingsForm() {
     );
   }
 
-  // RE-ADDED: Conditional UI for error state.
   if (error && !isSaving) {
     return (
       <div className="flex flex-col justify-center items-center min-h-screen text-center p-4" style={{ backgroundColor: '#efefef' }}>
@@ -422,205 +578,276 @@ export default function SettingsForm() {
   }
 
   return (
-      <form onSubmit={handleSave} className="w-full max-w-4xl mx-auto flex flex-col gap-6">
-        <div className="flex justify-end">
-          <Button
-            type="button"
-            // onClick={handleNavigateToServices}
-            className="text-white bg-[#a4262c] hover:bg-[#a4262c]/90"
-          >
-            <Settings className="w-4 h-4 mr-2" />
-            Your Services & Prices
-          </Button>
-        </div>
+    <form onSubmit={handleSave} className="w-full max-w-4xl mx-auto flex flex-col gap-6">
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          // onClick={handleNavigateToServices}
+          className="text-white bg-[#a4262c] hover:bg-[#a4262c]/90"
+        >
+          <Settings className="w-4 h-4 mr-2" />
+          Your Services & Prices
+        </Button>
+      </div>
 
+      {/* User Details Card */}
+      <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow mt-6" style={{ backgroundColor: '#ffffff' }}>
+        <CardHeader className="p-0">
+          <div className="px-6 py-4" style={{ backgroundColor: '#011d41' }}>
+            <CardTitle className="text-white flex items-center gap-2 text-base font-semibold">
+              <User className="w-5 h-5" />
+              User Details
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6 space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              {/* FIXED: Remove bg-black by explicitly overriding with !important and proper class removal */}
+              {imageError || isImageLoading ? (
+                <FallbackAvatar size={80} />
+              ) : (
+                <img
+                  src={formData.profileImage}
+                  alt="Profile"
+                  className="w-20 h-20 rounded-full object-cover border-4 shadow-sm !bg-gray-100"
+                  style={{
+                    borderColor: '#efefef',
+                    backgroundColor: '#f5f5f5 !important' // Force override the black background
+                  }}
+                  onError={handleImageError}
+                  onLoad={handleImageLoad}
+                />
+              )}
 
-        {/* User Details Card */}
-        <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow mt-6" style={{ backgroundColor: '#ffffff' }}>
-          <CardHeader className="p-0">
-            <div className="px-6 py-4" style={{ backgroundColor: '#011d41' }}>
-              <CardTitle className="text-white flex items-center gap-2 text-base font-semibold">
-                <User className="w-5 h-5" />
-                User Details
-              </CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="p-6 space-y-6">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <img src={formData.profileImage} alt="Profile" className="w-20 h-20 rounded-full object-cover border-4 shadow-sm" style={{ borderColor: '#efefef' }} />
-                <div className="absolute inset-0 rounded-full bg-black bg-opacity-0 hover:bg-opacity-10 transition-all cursor-pointer flex items-center justify-center" onClick={() => fileInputRef.current?.click()}>
-                  <Upload className="w-5 h-5 text-white opacity-0 hover:opacity-100 transition-opacity" />
-                </div>
-              </div>
-              <div>
-                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" aria-label="Upload profile image" />
-                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} className="hover:opacity-80 transition-colors" style={{ borderColor: '#a4262c', color: '#a4262c' }}>
-                  <Upload className="w-4 h-4 mr-2" />
-                  Change Photo
-                </Button>
-                <p className="text-xs mt-1" style={{ color: '#011d41', opacity: 0.7 }}>JPG, PNG or GIF. Max 5MB.</p>
+              {/* Upload overlay */}
+              <div className="absolute inset-0 rounded-full bg-opacity-0 hover:bg-opacity-20 transition-all cursor-pointer flex items-center justify-center" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="w-5 h-5 text-white opacity-0 hover:opacity-100 transition-opacity" />
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="firstName" className="text-sm font-medium" style={{ color: '#011d41' }}>First Name <span style={{ color: '#a4262c' }}>*</span></Label>
-                <Input id="firstName" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} className="transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName" className="text-sm font-medium" style={{ color: '#011d41' }}>Last Name <span style={{ color: '#a4262c' }}>*</span></Label>
-                <Input id="lastName" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} className="transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} required />
-              </div>
+            <div>
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" aria-label="Upload profile image" />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                className="hover:opacity-80 transition-colors"
+                style={{ borderColor: '#a4262c', color: '#a4262c' }}
+                disabled={isImageLoading}
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                {isImageLoading ? 'Processing...' : 'Change Photo'}
+              </Button>
+              <p className="text-xs mt-1" style={{ color: '#011d41', opacity: 0.7 }}>JPG, PNG or GIF. Max 5MB.</p>
+              {/* FIXED: Added error feedback */}
+              {imageError && (
+                <p className="text-xs mt-1 text-red-500">
+                  Failed to load image. Using default avatar.
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="firstName" className="text-sm font-medium" style={{ color: '#011d41' }}>First Name <span style={{ color: '#a4262c' }}>*</span></Label>
+              <Input id="firstName" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} className="transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} required />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone" className="text-sm font-medium" style={{ color: '#011d41' }}>Phone Number <span style={{ color: '#a4262c' }}>*</span></Label>
-              <Input id="phone" type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} className="transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} required />
+              <Label htmlFor="lastName" className="text-sm font-medium" style={{ color: '#011d41' }}>Last Name <span style={{ color: '#a4262c' }}>*</span></Label>
+              <Input id="lastName" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} className="transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} required />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="phone" className="text-sm font-medium" style={{ color: '#011d41' }}>Phone Number <span style={{ color: '#a4262c' }}>*</span></Label>
+            <Input id="phone" type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} className="transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} required />
+          </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox id="available" checked={formData.available} onCheckedChange={(checked) => handleInputChange('available', !!checked)} className="data-[state=checked]:border-0" style={{ backgroundColor: formData.available ? '#a4262c' : 'transparent', borderColor: '#a4262c' }} />
+            <Label htmlFor="available" className="text-sm font-medium cursor-pointer" style={{ color: '#011d41' }}>Currently available for new clients</Label>
+          </div>
+          <div className="space-y-3">
+            <Label className="text-sm font-medium" style={{ color: '#011d41' }}>Languages You Can Speak <span style={{ color: '#a4262c' }}>*</span></Label>
+            <MultiSelect options={AVAILABLE_LANGUAGES} selected={formData.languages} onSelectionChange={handleLanguageSelectionChange} placeholder="Select languages you can speak..." />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="biography" className="text-sm font-medium" style={{ color: '#011d41' }}>Professional Biography</Label>
+            <Textarea id="biography" value={formData.biography} onChange={(e) => handleInputChange('biography', e.target.value)} rows={4} maxLength={maxBiographyLength} className="resize-none transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} placeholder="Tell us about your professional background and expertise..." />
+            <div className="flex justify-between text-xs" style={{ color: '#011d41', opacity: 0.7 }}>
+              <span>Brief description of your professional background</span>
+              <span className={biographyCharCount > maxBiographyLength * 0.9 ? 'font-medium' : ''} style={{ color: biographyCharCount > maxBiographyLength * 0.9 ? '#a4262c' : '#011d41' }}>{biographyCharCount}/{maxBiographyLength}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Membership Information */}
+      <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow mt-6" style={{ backgroundColor: '#ffffff' }}>
+        <CardHeader className="p-0">
+          <div className="px-6 py-4" style={{ backgroundColor: '#011d41' }}>
+            <CardTitle className="text-white flex items-center gap-2 text-base font-semibold">
+              <User className="w-5 h-5" />
+              Membership Information
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div>
+              <Label className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Status</Label>
+              <div className="mt-1">
+                <Badge className="font-medium"
+                  style={{
+                    backgroundColor: STATUS_CONFIG[membershipInfo.status]?.bgColor || '#efefef',
+                    color: STATUS_CONFIG[membershipInfo.status]?.color || '#000000'
+                  }}
+                >
+                  {STATUS_CONFIG[membershipInfo.status]?.label || 'N/A'}
+                </Badge>
+
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Member Since</Label>
+              <p className="mt-1 text-sm font-medium" style={{ color: '#011d41' }}>
+                {membershipInfo.memberSince ? new Date(membershipInfo.memberSince).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}
+              </p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Expiry Date</Label>
+              <p className="mt-1 text-sm font-medium" style={{ color: '#011d41' }}>
+                {membershipInfo.expiryDate ? new Date(membershipInfo.expiryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}
+              </p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Membership Tier</Label>
+              <p className="mt-1 text-sm font-medium" style={{ color: '#011d41' }}>{membershipInfo.tier || 'N/A'}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Business Address in Canada */}
+      <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow mt-6" style={{ backgroundColor: '#ffffff' }}>
+        <CardHeader className="p-0">
+          <div className="px-6 py-4" style={{ backgroundColor: '#011d41' }}>
+            <CardTitle className="text-white flex items-center gap-2 text-base font-semibold">
+              <Building2 className="w-5 h-5" />
+              Business Address in Canada
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="street" className="text-sm font-medium" style={{ color: '#011d41' }}>Street Address</Label>
+            <Input
+              id="street"
+              value={businessAddress.street}
+              onChange={(e) => handleBusinessAddressChange('street', e.target.value)}
+              className="transition-colors focus:ring-2"
+              style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties}
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="aptUnit" className="text-sm font-medium" style={{ color: '#011d41' }}>Apt. Unit# (Optional)</Label>
+              <Input
+                id="aptUnit"
+                value={businessAddress.aptUnit || ''}
+                onChange={(e) => handleBusinessAddressChange('aptUnit', e.target.value)}
+                className="transition-colors focus:ring-2"
+                style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="zipCode" className="text-sm font-medium" style={{ color: '#011d41' }}>Postal Code</Label>
+              <Input
+                id="zipCode"
+                value={businessAddress.zipCode}
+                onChange={(e) => handleBusinessAddressChange('zipCode', e.target.value)}
+                className="transition-colors focus:ring-2"
+                style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="city" className="text-sm font-medium" style={{ color: '#011d41' }}>City</Label>
+              <Input
+                id="city"
+                value={businessAddress.city}
+                onChange={(e) => handleBusinessAddressChange('city', e.target.value)}
+                className="transition-colors focus:ring-2"
+                style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="state" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Province</Label>
+              <Input id="state" value={businessAddress.state} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="country" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Country</Label>
+              <Input id="country" value={businessAddress.country} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
+            </div>
+            <div /> {/* Empty div to align the country field to the left */}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Licensing and Regulatory Information */}
+      <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow mt-6" style={{ backgroundColor: '#ffffff' }}>
+        <CardHeader className="p-0">
+          <div className="px-6 py-4" style={{ backgroundColor: '#011d41' }}>
+            <CardTitle className="text-white flex items-center gap-2 text-base font-semibold">
+              <ShieldCheck className="w-5 h-5" />
+              Licensing and Regulatory Information
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="licenseNumber" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>License Number</Label>
+            <Input id="licenseNumber" value={licensingInfo.licenseNumber} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="issuingAuthority" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Issuing Authority</Label>
+            <Input id="issuingAuthority" value={licensingInfo.issuingAuthority} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center space-x-2">
-              <Checkbox id="available" checked={formData.available} onCheckedChange={(checked) => handleInputChange('available', !!checked)} className="data-[state=checked]:border-0" style={{ backgroundColor: formData.available ? '#a4262c' : 'transparent', borderColor: '#a4262c' }} />
-              <Label htmlFor="available" className="text-sm font-medium cursor-pointer" style={{ color: '#011d41' }}>Currently available for new clients</Label>
-            </div>
-            <div className="space-y-3">
-              <Label className="text-sm font-medium" style={{ color: '#011d41' }}>Languages You Can Speak <span style={{ color: '#a4262c' }}>*</span></Label>
-              <MultiSelect options={AVAILABLE_LANGUAGES} selected={formData.languages} onSelectionChange={handleLanguageSelectionChange} placeholder="Select languages you can speak..." />
+              <Checkbox id="isLawyer" checked={licensingInfo.isLawyer} disabled className="data-[state=checked]:border-0" style={{ backgroundColor: licensingInfo.isLawyer ? '#a4262c' : 'transparent', borderColor: '#a4262c' }} />
+              <Label htmlFor="isLawyer" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>I am a Lawyer</Label>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="biography" className="text-sm font-medium" style={{ color: '#011d41' }}>Professional Biography</Label>
-              <Textarea id="biography" value={formData.biography} onChange={(e) => handleInputChange('biography', e.target.value)} rows={4} maxLength={maxBiographyLength} className="resize-none transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} placeholder="Tell us about your professional background and expertise..." />
-              <div className="flex justify-between text-xs" style={{ color: '#011d41', opacity: 0.7 }}>
-                <span>Brief description of your professional background</span>
-                <span className={biographyCharCount > maxBiographyLength * 0.9 ? 'font-medium' : ''} style={{ color: biographyCharCount > maxBiographyLength * 0.9 ? '#a4262c' : '#011d41' }}>{biographyCharCount}/{maxBiographyLength}</span>
-              </div>
+              <Label htmlFor="yearsInPractice" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Years in Practice</Label>
+              <Input id="yearsInPractice" value={licensingInfo.yearsInPractice} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Membership Information */}
-        <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow mt-6" style={{ backgroundColor: '#ffffff' }}>
-          <CardHeader className="p-0">
-            <div className="px-6 py-4" style={{ backgroundColor: '#011d41' }}>
-              <CardTitle className="text-white flex items-center gap-2 text-base font-semibold">
-                <User className="w-5 h-5" />
-                Membership Information
-              </CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div>
-                <Label className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Status</Label>
-                <div className="mt-1">
-                  <Badge className="font-medium text-white" style={{ backgroundColor: STATUS_CONFIG[membershipInfo.status]?.bgColor || '#efefef' }}>
-                    {STATUS_CONFIG[membershipInfo.status]?.label || 'N/A'}
-                  </Badge>
-                </div>
-              </div>
-              <div>
-                <Label className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Member Since</Label>
-                <p className="mt-1 text-sm font-medium" style={{ color: '#011d41' }}>
-                  {membershipInfo.memberSince ? new Date(membershipInfo.memberSince).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}
-                </p>
-              </div>
-              <div>
-                <Label className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Expiry Date</Label>
-                <p className="mt-1 text-sm font-medium" style={{ color: '#011d41' }}>
-                  {membershipInfo.expiryDate ? new Date(membershipInfo.expiryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}
-                </p>
-              </div>
-              <div>
-                <Label className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Membership Tier</Label>
-                <p className="mt-1 text-sm font-medium" style={{ color: '#011d41' }}>{membershipInfo.tier || 'N/A'}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Save Button */}
+      <div className="flex justify-end">
+        <Button
+          type="submit"
+          className="px-6 text-white bg-[#a4262c] hover:bg-[#a4262c]/90"
+          disabled={isSaving}
+        >
+          {isSaving ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            'Save Changes'
+          )}
+        </Button>
+      </div>
 
-        {/* Business Address in Canada */}
-        <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow mt-6" style={{ backgroundColor: '#ffffff' }}>
-          <CardHeader className="p-0">
-            <div className="px-6 py-4" style={{ backgroundColor: '#011d41' }}>
-              <CardTitle className="text-white flex items-center gap-2 text-base font-semibold">
-                <Building2 className="w-5 h-5" />
-                Business Address in Canada
-              </CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="street" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Street Address</Label>
-              <Input id="street" value={businessAddress.street} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="city" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>City</Label>
-                <Input id="city" value={businessAddress.city} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="state" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Province</Label>
-                <Input id="state" value={businessAddress.state} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="zipCode" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Postal Code</Label>
-                <Input id="zipCode" value={businessAddress.zipCode} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="country" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Country</Label>
-                <Input id="country" value={businessAddress.country} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Licensing and Regulatory Information */}
-        <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow mt-6" style={{ backgroundColor: '#ffffff' }}>
-          <CardHeader className="p-0">
-            <div className="px-6 py-4" style={{ backgroundColor: '#011d41' }}>
-              <CardTitle className="text-white flex items-center gap-2 text-base font-semibold">
-                <ShieldCheck className="w-5 h-5" />
-                Licensing and Regulatory Information
-              </CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="licenseNumber" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>License Number</Label>
-              <Input id="licenseNumber" value={licensingInfo.licenseNumber} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="issuingAuthority" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Issuing Authority</Label>
-              <Input id="issuingAuthority" value={licensingInfo.issuingAuthority} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center space-x-2">
-                <Checkbox id="isLawyer" checked={licensingInfo.isLawyer} disabled className="data-[state=checked]:border-0" style={{ backgroundColor: licensingInfo.isLawyer ? '#a4262c' : 'transparent', borderColor: '#a4262c' }} />
-                <Label htmlFor="isLawyer" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>I am a Lawyer</Label>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="yearsInPractice" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Years in Practice</Label>
-                <Input id="yearsInPractice" value={licensingInfo.yearsInPractice} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Save Button */}
-        <div className="flex justify-end">
-          <Button
-            type="submit"
-            className="px-6 text-white bg-[#a4262c] hover:bg-[#a4262c]/90"
-          // disabled={isSaving}
-          >
-            Save Changes
-          </Button>
-        </div>
-
-        {error && (
-          <p className="text-red-500 text-right text-sm mt-2">{error}</p>
-        )}
-      </form>
-
-
+      {error && (
+        <p className="text-red-500 text-right text-sm mt-2">{error}</p>
+      )}
+    </form>
   )
 }

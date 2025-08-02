@@ -3,6 +3,7 @@ import { createContext, useState, useContext, type ReactNode } from 'react';
 interface User {
   firstName: string;
   lastName: string;
+  profileImage: string;
 }
 
 interface UserContextType {
@@ -15,7 +16,7 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 
 // Create a Provider component that will wrap our app
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User>({ firstName: '', lastName: '' });
+  const [user, setUser] = useState<User>({ firstName: '', lastName: '', profileImage: '/default-avatar.png' });
 
   return (
     <UserContext.Provider value={{ user, setUser }}>
