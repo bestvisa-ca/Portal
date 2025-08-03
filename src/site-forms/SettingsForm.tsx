@@ -2,6 +2,7 @@
 
 // RE-ADDED: useEffect for data fetching.
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { toast } from "sonner"
 
 import {
   Card,
@@ -594,10 +595,17 @@ export default function SettingsForm() {
         });
       }
 
-      alert('Settings saved successfully!');
+      toast.success("Settings Saved!", {
+        description: "Your changes have been successfully updated.",
+        duration: 3000 // Display for 3 seconds
+      });
 
     } catch (err) {
       console.error('Error saving data:', err);
+      toast.error("Save Failed", {
+        description: "An error occurred while saving your settings.",
+      });
+
       setError('An error occurred while saving your settings.');
     } finally {
       setIsSaving(false);
@@ -607,24 +615,14 @@ export default function SettingsForm() {
   const biographyCharCount = formData.biography.length
   const maxBiographyLength = 2000
 
-  if (isFetching ) {
+  if (isFetching) {
     return (
       <div className="flex justify-center items-center min-h-screen" style={{ backgroundColor: '#efefef' }}>
         <Loader2 className="w-12 h-12 animate-spin" style={{ color: '#a4262c' }} />
       </div>
     );
   }
-if (isSaving) {
-  return (
-    <div 
-      className="flex justify-center items-center min-h-screen" 
-      // Change the background color to an rgba value
-      style={{ backgroundColor: 'rgba(239, 239, 239, 0.7)' }}
-    >
-      <Loader2 className="w-12 h-12 animate-spin" style={{ color: '#a4262cff' }} />
-    </div>
-  );
-}
+
   if (error && !isSaving) {
     return (
       <div className="flex flex-col justify-center items-center min-h-screen text-center p-4" style={{ backgroundColor: '#efefef' }}>
@@ -645,289 +643,301 @@ if (isSaving) {
   };
 
   return (
-    <form onSubmit={handleSave} className="w-full max-w-4xl mx-auto flex flex-col gap-6">
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          onClick={handleNavigateToServices}
-          className="text-white bg-[#a4262c] hover:bg-[#a4262c]/90"
+    <div className='relative'>
+      {/* This is the new overlay. It only appears when isSaving is true. */}
+      {isSaving && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center"
+          style={{ backgroundColor: 'rgba(255, 255, 255, 0.85)' }} // A slightly transparent white looks best
         >
-          <Settings className="w-4 h-4 mr-2" />
-          Your Services & Prices
-        </Button>
-      </div>
-
-      {/* User Details Card */}
-      <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow mt-6" style={{ backgroundColor: '#ffffff' }}>
-        <CardHeader className="p-0">
-          <div className="px-6 py-4" style={{ backgroundColor: '#011d41' }}>
-            <CardTitle className="text-white flex items-center gap-2 text-base font-semibold">
-              <User className="w-5 h-5" />
-              User Details
-            </CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              {/* FIXED: Remove bg-black by explicitly overriding with !important and proper class removal */}
-              {imageError || isImageLoading ? (
-                <FallbackAvatar size={80} />
-              ) : (
-                <img
-                  src={formData.profileImage}
-                  alt="Profile"
-                  className="w-20 h-20 rounded-full object-cover border-4 shadow-sm !bg-gray-100"
-                  style={{
-                    borderColor: '#efefef',
-                    backgroundColor: '#f5f5f5 !important' // Force override the black background
-                  }}
-                  onError={handleImageError}
-                  onLoad={handleImageLoad}
-                />
-              )}
-
-              {/* Upload overlay */}
-              <div className="absolute inset-0 rounded-full bg-opacity-0 hover:bg-opacity-20 transition-all cursor-pointer flex items-center justify-center" onClick={() => fileInputRef.current?.click()}>
-                <Upload className="w-5 h-5 text-white opacity-0 hover:opacity-100 transition-opacity" />
-              </div>
-            </div>
-            <div>
-              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" aria-label="Upload profile image" />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-                className="hover:opacity-80 transition-colors"
-                style={{ borderColor: '#a4262c', color: '#a4262c' }}
-                disabled={isImageLoading}
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                {isImageLoading ? 'Processing...' : 'Change Photo'}
-              </Button>
-              <p className="text-xs mt-1" style={{ color: '#011d41', opacity: 0.7 }}>JPG, PNG or GIF. Max 5MB.</p>
-              {/* FIXED: Added error feedback */}
-              {imageError && (
-                <p className="text-xs mt-1 text-red-500">
-                  Failed to load image. Using default avatar.
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="firstName" className="text-sm font-medium" style={{ color: '#011d41' }}>First Name <span style={{ color: '#a4262c' }}>*</span></Label>
-              <Input id="firstName" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} className="transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="lastName" className="text-sm font-medium" style={{ color: '#011d41' }}>Last Name <span style={{ color: '#a4262c' }}>*</span></Label>
-              <Input id="lastName" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} className="transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} required />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="phone" className="text-sm font-medium" style={{ color: '#011d41' }}>Phone Number <span style={{ color: '#a4262c' }}>*</span></Label>
-            <Input id="phone" type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} className="transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} required />
-          </div>
-          <div className="flex items-center space-x-2">
-            <Checkbox id="available" checked={formData.available} onCheckedChange={(checked) => handleInputChange('available', !!checked)} className="data-[state=checked]:border-0" style={{ backgroundColor: formData.available ? '#a4262c' : 'transparent', borderColor: '#a4262c' }} />
-            <Label htmlFor="available" className="text-sm font-medium cursor-pointer" style={{ color: '#011d41' }}>Currently available for new clients</Label>
-          </div>
-          <div className="space-y-3">
-            <Label>Languages You Can Speak <span style={{ color: '#a4262c' }}>*</span></Label>
-            <MultiSelect
-              options={availableLanguages}
-              selected={formData.languages}
-              onSelectionChange={handleLanguageSelectionChange}
-              placeholder="Select languages you can speak..."
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="biography" className="text-sm font-medium" style={{ color: '#011d41' }}>Professional Biography</Label>
-            <Textarea id="biography" value={formData.biography} onChange={(e) => handleInputChange('biography', e.target.value)} rows={4} maxLength={maxBiographyLength} className="resize-none transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} placeholder="Tell us about your professional background and expertise..." />
-            <div className="flex justify-between text-xs" style={{ color: '#011d41', opacity: 0.7 }}>
-              <span>Brief description of your professional background</span>
-              <span className={biographyCharCount > maxBiographyLength * 0.9 ? 'font-medium' : ''} style={{ color: biographyCharCount > maxBiographyLength * 0.9 ? '#a4262c' : '#011d41' }}>{biographyCharCount}/{maxBiographyLength}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Membership Information */}
-      <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow mt-6" style={{ backgroundColor: '#ffffff' }}>
-        <CardHeader className="p-0">
-          <div className="px-6 py-4" style={{ backgroundColor: '#011d41' }}>
-            <CardTitle className="text-white flex items-center gap-2 text-base font-semibold">
-              <User className="w-5 h-5" />
-              Membership Information
-            </CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div>
-              <Label className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Status</Label>
-              <div className="mt-1">
-                <Badge className="font-medium"
-                  style={{
-                    backgroundColor: STATUS_CONFIG[membershipInfo.status]?.bgColor || '#efefef',
-                    color: STATUS_CONFIG[membershipInfo.status]?.color || '#000000'
-                  }}
-                >
-                  {STATUS_CONFIG[membershipInfo.status]?.label || 'N/A'}
-                </Badge>
-
-              </div>
-            </div>
-            <div>
-              <Label className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Member Since</Label>
-              <p className="mt-1 text-sm font-medium" style={{ color: '#011d41' }}>
-                {membershipInfo.memberSince ? new Date(membershipInfo.memberSince).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}
-              </p>
-            </div>
-            <div>
-              <Label className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Expiry Date</Label>
-              <p className="mt-1 text-sm font-medium" style={{ color: '#011d41' }}>
-                {membershipInfo.expiryDate ? new Date(membershipInfo.expiryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}
-              </p>
-            </div>
-            <div>
-              <Label className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Membership Tier</Label>
-              <p className="mt-1 text-sm font-medium" style={{ color: '#011d41' }}>{membershipInfo.tier || 'N/A'}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Business Address in Canada */}
-      <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow mt-6" style={{ backgroundColor: '#ffffff' }}>
-        <CardHeader className="p-0">
-          <div className="px-6 py-4" style={{ backgroundColor: '#011d41' }}>
-            <CardTitle className="text-white flex items-center gap-2 text-base font-semibold">
-              <Building2 className="w-5 h-5" />
-              Business Address in Canada
-            </CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6 space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="street" className="text-sm font-medium" style={{ color: '#011d41' }}>Street Address</Label>
-            <Input
-              id="street"
-              value={businessAddress.street}
-              onChange={(e) => handleBusinessAddressChange('street', e.target.value)}
-              className="transition-colors focus:ring-2"
-              style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties}
-            />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="aptUnit" className="text-sm font-medium" style={{ color: '#011d41' }}>Apt. Unit# (Optional)</Label>
-              <Input
-                id="aptUnit"
-                value={businessAddress.aptUnit || ''}
-                onChange={(e) => handleBusinessAddressChange('aptUnit', e.target.value)}
-                className="transition-colors focus:ring-2"
-                style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="zipCode" className="text-sm font-medium" style={{ color: '#011d41' }}>Postal Code</Label>
-              <Input
-                id="zipCode"
-                value={businessAddress.zipCode}
-                onChange={(e) => handleBusinessAddressChange('zipCode', e.target.value)}
-                className="transition-colors focus:ring-2"
-                style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="city" className="text-sm font-medium" style={{ color: '#011d41' }}>City</Label>
-              <Input
-                id="city"
-                value={businessAddress.city}
-                onChange={(e) => handleBusinessAddressChange('city', e.target.value)}
-                className="transition-colors focus:ring-2"
-                style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="state" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Province</Label>
-              <Input id="state" value={businessAddress.state} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="country" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Country</Label>
-              <Input id="country" value={businessAddress.country} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
-            </div>
-            <div /> {/* Empty div to align the country field to the left */}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Licensing and Regulatory Information */}
-      <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow mt-6" style={{ backgroundColor: '#ffffff' }}>
-        <CardHeader className="p-0">
-          <div className="px-6 py-4" style={{ backgroundColor: '#011d41' }}>
-            <CardTitle className="text-white flex items-center gap-2 text-base font-semibold">
-              <ShieldCheck className="w-5 h-5" />
-              Licensing and Regulatory Information
-            </CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6 space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="licenseNumber" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>License Number</Label>
-            <Input id="licenseNumber" value={licensingInfo.licenseNumber} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="issuingAuthority" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Issuing Authority</Label>
-            <Input id="issuingAuthority" value={licensingInfo.issuingAuthority} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox id="isLawyer" checked={licensingInfo.isLawyer} disabled className="data-[state=checked]:border-0" style={{ backgroundColor: licensingInfo.isLawyer ? '#a4262c' : 'transparent', borderColor: '#a4262c' }} />
-              <Label htmlFor="isLawyer" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>I am a Lawyer</Label>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="yearsInPractice" className="text-sm font-medium" style={{ color: '#011d41' }}>Years in Practice</Label>
-              <Input
-                id="yearsInPractice"
-                type="number"
-                value={licensingInfo.yearsInPractice}
-                onChange={(e) => handleLicensingInfoChange('yearsInPractice', e.target.value)}
-                className="transition-colors focus:ring-2"
-                style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Save Button */}
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          className="px-6 text-white bg-[#a4262c] hover:bg-[#a4262c]/90"
-          disabled={isSaving}
-        >
-          {isSaving ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            'Save Changes'
-          )}
-        </Button>
-      </div>
-
-      {error && (
-        <p className="text-red-500 text-right text-sm mt-2">{error}</p>
+          <Loader2 className="h-12 w-12 animate-spin" style={{ color: '#a4262c' }} />
+        </div>
       )}
-    </form>
+      <form onSubmit={handleSave} className="w-full max-w-4xl mx-auto flex flex-col gap-6">
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            onClick={handleNavigateToServices}
+            className="text-white bg-[#a4262c] hover:bg-[#a4262c]/90"
+          >
+            <Settings className="w-4 h-4 mr-2" />
+            Your Services & Prices
+          </Button>
+        </div>
+
+        {/* User Details Card */}
+        <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow mt-6" style={{ backgroundColor: '#ffffff' }}>
+          <CardHeader className="p-0">
+            <div className="px-6 py-4" style={{ backgroundColor: '#011d41' }}>
+              <CardTitle className="text-white flex items-center gap-2 text-base font-semibold">
+                <User className="w-5 h-5" />
+                User Details
+              </CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6 space-y-6">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                {/* FIXED: Remove bg-black by explicitly overriding with !important and proper class removal */}
+                {imageError || isImageLoading ? (
+                  <FallbackAvatar size={80} />
+                ) : (
+                  <img
+                    src={formData.profileImage}
+                    alt="Profile"
+                    className="w-20 h-20 rounded-full object-cover border-4 shadow-sm !bg-gray-100"
+                    style={{
+                      borderColor: '#efefef',
+                      backgroundColor: '#f5f5f5 !important' // Force override the black background
+                    }}
+                    onError={handleImageError}
+                    onLoad={handleImageLoad}
+                  />
+                )}
+
+                {/* Upload overlay */}
+                <div className="absolute inset-0 rounded-full bg-opacity-0 hover:bg-opacity-20 transition-all cursor-pointer flex items-center justify-center" onClick={() => fileInputRef.current?.click()}>
+                  <Upload className="w-5 h-5 text-white opacity-0 hover:opacity-100 transition-opacity" />
+                </div>
+              </div>
+              <div>
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" aria-label="Upload profile image" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="hover:opacity-80 transition-colors"
+                  style={{ borderColor: '#a4262c', color: '#a4262c' }}
+                  disabled={isImageLoading}
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  {isImageLoading ? 'Processing...' : 'Change Photo'}
+                </Button>
+                <p className="text-xs mt-1" style={{ color: '#011d41', opacity: 0.7 }}>JPG, PNG or GIF. Max 5MB.</p>
+                {/* FIXED: Added error feedback */}
+                {imageError && (
+                  <p className="text-xs mt-1 text-red-500">
+                    Failed to load image. Using default avatar.
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="firstName" className="text-sm font-medium" style={{ color: '#011d41' }}>First Name <span style={{ color: '#a4262c' }}>*</span></Label>
+                <Input id="firstName" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} className="transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName" className="text-sm font-medium" style={{ color: '#011d41' }}>Last Name <span style={{ color: '#a4262c' }}>*</span></Label>
+                <Input id="lastName" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} className="transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} required />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone" className="text-sm font-medium" style={{ color: '#011d41' }}>Phone Number <span style={{ color: '#a4262c' }}>*</span></Label>
+              <Input id="phone" type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} className="transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} required />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox id="available" checked={formData.available} onCheckedChange={(checked) => handleInputChange('available', !!checked)} className="data-[state=checked]:border-0" style={{ backgroundColor: formData.available ? '#a4262c' : 'transparent', borderColor: '#a4262c' }} />
+              <Label htmlFor="available" className="text-sm font-medium cursor-pointer" style={{ color: '#011d41' }}>Currently available for new clients</Label>
+            </div>
+            <div className="space-y-3">
+              <Label>Languages You Can Speak <span style={{ color: '#a4262c' }}>*</span></Label>
+              <MultiSelect
+                options={availableLanguages}
+                selected={formData.languages}
+                onSelectionChange={handleLanguageSelectionChange}
+                placeholder="Select languages you can speak..."
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="biography" className="text-sm font-medium" style={{ color: '#011d41' }}>Professional Biography</Label>
+              <Textarea id="biography" value={formData.biography} onChange={(e) => handleInputChange('biography', e.target.value)} rows={4} maxLength={maxBiographyLength} className="resize-none transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} placeholder="Tell us about your professional background and expertise..." />
+              <div className="flex justify-between text-xs" style={{ color: '#011d41', opacity: 0.7 }}>
+                <span>Brief description of your professional background</span>
+                <span className={biographyCharCount > maxBiographyLength * 0.9 ? 'font-medium' : ''} style={{ color: biographyCharCount > maxBiographyLength * 0.9 ? '#a4262c' : '#011d41' }}>{biographyCharCount}/{maxBiographyLength}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Membership Information */}
+        <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow mt-6" style={{ backgroundColor: '#ffffff' }}>
+          <CardHeader className="p-0">
+            <div className="px-6 py-4" style={{ backgroundColor: '#011d41' }}>
+              <CardTitle className="text-white flex items-center gap-2 text-base font-semibold">
+                <User className="w-5 h-5" />
+                Membership Information
+              </CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div>
+                <Label className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Status</Label>
+                <div className="mt-1">
+                  <Badge className="font-medium"
+                    style={{
+                      backgroundColor: STATUS_CONFIG[membershipInfo.status]?.bgColor || '#efefef',
+                      color: STATUS_CONFIG[membershipInfo.status]?.color || '#000000'
+                    }}
+                  >
+                    {STATUS_CONFIG[membershipInfo.status]?.label || 'N/A'}
+                  </Badge>
+
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Member Since</Label>
+                <p className="mt-1 text-sm font-medium" style={{ color: '#011d41' }}>
+                  {membershipInfo.memberSince ? new Date(membershipInfo.memberSince).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}
+                </p>
+              </div>
+              <div>
+                <Label className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Expiry Date</Label>
+                <p className="mt-1 text-sm font-medium" style={{ color: '#011d41' }}>
+                  {membershipInfo.expiryDate ? new Date(membershipInfo.expiryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}
+                </p>
+              </div>
+              <div>
+                <Label className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Membership Tier</Label>
+                <p className="mt-1 text-sm font-medium" style={{ color: '#011d41' }}>{membershipInfo.tier || 'N/A'}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Business Address in Canada */}
+        <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow mt-6" style={{ backgroundColor: '#ffffff' }}>
+          <CardHeader className="p-0">
+            <div className="px-6 py-4" style={{ backgroundColor: '#011d41' }}>
+              <CardTitle className="text-white flex items-center gap-2 text-base font-semibold">
+                <Building2 className="w-5 h-5" />
+                Business Address in Canada
+              </CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="street" className="text-sm font-medium" style={{ color: '#011d41' }}>Street Address</Label>
+              <Input
+                id="street"
+                value={businessAddress.street}
+                onChange={(e) => handleBusinessAddressChange('street', e.target.value)}
+                className="transition-colors focus:ring-2"
+                style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties}
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="aptUnit" className="text-sm font-medium" style={{ color: '#011d41' }}>Apt. Unit# (Optional)</Label>
+                <Input
+                  id="aptUnit"
+                  value={businessAddress.aptUnit || ''}
+                  onChange={(e) => handleBusinessAddressChange('aptUnit', e.target.value)}
+                  className="transition-colors focus:ring-2"
+                  style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="zipCode" className="text-sm font-medium" style={{ color: '#011d41' }}>Postal Code</Label>
+                <Input
+                  id="zipCode"
+                  value={businessAddress.zipCode}
+                  onChange={(e) => handleBusinessAddressChange('zipCode', e.target.value)}
+                  className="transition-colors focus:ring-2"
+                  style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="city" className="text-sm font-medium" style={{ color: '#011d41' }}>City</Label>
+                <Input
+                  id="city"
+                  value={businessAddress.city}
+                  onChange={(e) => handleBusinessAddressChange('city', e.target.value)}
+                  className="transition-colors focus:ring-2"
+                  style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="state" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Province</Label>
+                <Input id="state" value={businessAddress.state} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="country" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Country</Label>
+                <Input id="country" value={businessAddress.country} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
+              </div>
+              <div /> {/* Empty div to align the country field to the left */}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Licensing and Regulatory Information */}
+        <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow mt-6" style={{ backgroundColor: '#ffffff' }}>
+          <CardHeader className="p-0">
+            <div className="px-6 py-4" style={{ backgroundColor: '#011d41' }}>
+              <CardTitle className="text-white flex items-center gap-2 text-base font-semibold">
+                <ShieldCheck className="w-5 h-5" />
+                Licensing and Regulatory Information
+              </CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="licenseNumber" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>License Number</Label>
+              <Input id="licenseNumber" value={licensingInfo.licenseNumber} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="issuingAuthority" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Issuing Authority</Label>
+              <Input id="issuingAuthority" value={licensingInfo.issuingAuthority} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox id="isLawyer" checked={licensingInfo.isLawyer} disabled className="data-[state=checked]:border-0" style={{ backgroundColor: licensingInfo.isLawyer ? '#a4262c' : 'transparent', borderColor: '#a4262c' }} />
+                <Label htmlFor="isLawyer" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>I am a Lawyer</Label>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="yearsInPractice" className="text-sm font-medium" style={{ color: '#011d41' }}>Years in Practice</Label>
+                <Input
+                  id="yearsInPractice"
+                  type="number"
+                  value={licensingInfo.yearsInPractice}
+                  onChange={(e) => handleLicensingInfoChange('yearsInPractice', e.target.value)}
+                  className="transition-colors focus:ring-2"
+                  style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Save Button */}
+        <div className="flex justify-end">
+          <Button
+            type="submit"
+            className="px-6 text-white bg-[#a4262c] hover:bg-[#a4262c]/90"
+            disabled={isSaving}
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </Button>
+        </div>
+
+        {error && (
+          <p className="text-red-500 text-right text-sm mt-2">{error}</p>
+        )}
+      </form>
+    </div>
+
   )
 }
