@@ -59,6 +59,7 @@ interface ApiResponseData {
   issuingAuthority?: string;
   isLawyer?: boolean;
   yearsInPractice?: number;
+  availableLanguages?: LanguageOption[]; // The list of all possible languages
 }
 
 // Interfaces (Unchanged)
@@ -68,7 +69,7 @@ interface UserFormData {
   phone: string
   profileImage: string
   available: boolean
-  languages: string[]
+  languages: LanguageOption[] // Now an array of objects
   biography: string
 }
 
@@ -94,14 +95,21 @@ interface LicensingInfo {
   isLawyer: boolean
   yearsInPractice: number
 }
+interface LanguageOption {
+  name: string;
+  code: number | string;
+}
 
 // Constants and MultiSelect Component (Unchanged)...
-const AVAILABLE_LANGUAGES = [
-  'English', 'Spanish', 'French', 'German', 'Arabic', 'Chinese', 'Japanese',
-  'Korean', 'Portuguese', 'Italian', 'Russian', 'Dutch', 'Swedish',
-  'Norwegian', 'Danish', 'Polish', 'Turkish', 'Hebrew', 'Hindi', 'Thai'
-] as const
-
+function mapSelectedLanguages(
+  selectedCodes: (string | number)[],
+  allOptions: LanguageOption[]
+): LanguageOption[] {
+  if (!selectedCodes || selectedCodes.length === 0) return [];
+  return selectedCodes
+    .map(code => allOptions.find(option => String(option.code) === String(code)))
+    .filter((option): option is LanguageOption => option !== undefined);
+}
 const STATUS_CONFIG = {
   approved: { color: '#ffffff', bgColor: '#4e925d', label: 'Approved' },
   onboarding: { color: '#ffffff', bgColor: '#a4262c', label: 'Onboarding' },
@@ -110,13 +118,7 @@ const STATUS_CONFIG = {
   rejected: { color: '#ffffff', bgColor: '#646769', label: 'Rejected' }
 } as const;
 
-function parseLanguageString(langString: string | null): string[] {
-  if (!langString) {
-    return [];
-  }
-  // Split by semicolon and trim extra whitespace from each language name.
-  return langString.split(';').map(lang => lang.trim());
-}
+
 // This function translates the API status string to the correct type for your component
 function mapApiStatus(apiStatus?: string): MembershipInfo['status'] {
   if (!apiStatus) return 'underReview'; // Default for missing status
@@ -146,19 +148,31 @@ function MultiSelect({
   onSelectionChange,
   placeholder = "Select options...",
   className
-}: { options: readonly string[], selected: string[], onSelectionChange: (selected: string[]) => void, placeholder?: string, className?: string }) {
+}: {
+  options: readonly LanguageOption[],
+  selected: readonly LanguageOption[],
+  onSelectionChange: (selected: LanguageOption[]) => void,
+  placeholder?: string,
+  className?: string
+}) {
   const [open, setOpen] = useState(false)
-  const handleSelect = (option: string) => {
-    if (selected.includes(option)) {
-      onSelectionChange(selected.filter(item => item !== option))
+
+  const handleSelect = (option: LanguageOption) => {
+    const isSelected = selected.some(item => item.code === option.code);
+    if (isSelected) {
+      onSelectionChange(selected.filter(item => item.code !== option.code));
     } else {
-      onSelectionChange([...selected, option])
+      onSelectionChange([...selected, option]);
     }
   }
-  const handleRemove = (option: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    onSelectionChange(selected.filter(item => item !== option))
+
+
+  const handleRemove = (option: LanguageOption, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelectionChange(selected.filter(item => item.code !== option.code));
   }
+
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -175,12 +189,12 @@ function MultiSelect({
             ) : (
               selected.map((option) => (
                 <Badge
-                  key={option}
+                  key={option.code}
                   variant="secondary"
                   className="text-white hover:opacity-80 transition-colors"
                   style={{ backgroundColor: '#a4262c' }}
                 >
-                  {option}
+                  {option.name}
                   <X
                     className="ml-1 h-3 w-3 cursor-pointer hover:text-red-300 transition-colors"
                     onClick={(e) => handleRemove(option, e)}
@@ -197,22 +211,25 @@ function MultiSelect({
           <CommandInput placeholder="Search languages..." />
           <CommandEmpty>No language found.</CommandEmpty>
           <CommandGroup className="max-h-64 overflow-auto">
-            {options.map((option) => (
-              <CommandItem
-                key={option}
-                onSelect={() => handleSelect(option)}
-                className="cursor-pointer"
-              >
-                <Check
-                  className={cn(
-                    "mr-2 h-4 w-4",
-                    selected.includes(option) ? "opacity-100" : "opacity-0"
-                  )}
-                  style={{ color: '#a4262c' }}
-                />
-                {option}
-              </CommandItem>
-            ))}
+            {options.map((option) => {
+              const isSelected = selected.some(item => item.code === option.code);
+              return (
+                <CommandItem
+                  key={option.code}
+                  onSelect={() => handleSelect(option)}
+                  className="cursor-pointer"
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      isSelected ? "opacity-100" : "opacity-0"
+                    )}
+                    style={{ color: '#a4262c' }}
+                  />
+                  {option.name}
+                </CommandItem>
+              )
+            })}
           </CommandGroup>
         </Command>
       </PopoverContent>
@@ -221,6 +238,8 @@ function MultiSelect({
 }
 
 export default function SettingsForm() {
+  const [availableLanguages, setAvailableLanguages] = useState<LanguageOption[]>([]);
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isFetching, setIsFetching] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -283,35 +302,34 @@ export default function SettingsForm() {
   )
 
   useEffect(() => {
-    // This helper function populates the form states to avoid repeating code.
     const populateStates = (apiData: ApiResponseData) => {
-      console.log("DEBUG: Attempting to populate states...");
       if (apiData && apiData.message === 'success') {
-        console.log("DEBUG: API message is 'success'. Proceeding to set states.");
-        let imageUrl = '/default-avatar.png';
-        if (apiData.profileImage && apiData.profileImage.trim() !== '') {
-          imageUrl = apiData.profileImage.startsWith('data:image/') ? apiData.profileImage : `data:image/jpeg;base64,${apiData.profileImage}`;
-        }
-        setUser({
-          firstName: apiData.firstName ?? '',
-          lastName: apiData.lastName ?? '',
-          profileImage: imageUrl
-        });
+        const allLanguages = apiData.availableLanguages || [];
+        setAvailableLanguages(allLanguages);
+
+        // FIX #1: Correctly parse the string of codes and map them to full objects
+        const selectedLanguageCodes = (apiData.languages ?? '').split(',').map(v => v.trim()).filter(Boolean);
+        const selectedLanguageObjects = mapSelectedLanguages(selectedLanguageCodes, allLanguages);
+
+        const imageUrl = apiData.profileImage ? `data:image/png;base64,${apiData.profileImage}` : '/default-avatar.png';
+
         setFormData({
           firstName: apiData.firstName ?? '',
           lastName: apiData.lastName ?? '',
           phone: apiData.phoneNumber ?? '',
           profileImage: imageUrl,
           available: apiData.available ?? false,
-          languages: parseLanguageString(apiData.languages ?? ''),
+          languages: selectedLanguageObjects, // Use the corrected array of objects
           biography: apiData.biography ?? '',
         });
+
         setMembershipInfo({
           status: mapApiStatus(apiData.status),
           memberSince: apiData.memberSince ?? '',
           expiryDate: apiData.expiryDate ?? '',
           tier: apiData.membership ?? '',
         });
+
         setBusinessAddress({
           street: apiData.street ?? '',
           city: apiData.city ?? '',
@@ -320,38 +338,44 @@ export default function SettingsForm() {
           country: apiData.country ?? '',
           aptUnit: apiData.aptUnit ?? ''
         });
+
         setLicensingInfo({
           licenseNumber: apiData.licenseNumber ?? '',
           issuingAuthority: apiData.issuingAuthority ?? '',
           isLawyer: apiData.isLawyer ?? false,
-          yearsInPractice: apiData.yearsInPractice ?? 0,
+          yearsInPractice: apiData.yearsInPractice ?? 0
         });
-        setImageError(false);
-        console.log("DEBUG: All states populated successfully.");
-      } else {
-        console.log("DEBUG: populateStates failed. apiData.message was not 'success' or apiData was null. apiData:", apiData);
+
+        setUser({
+          firstName: apiData.firstName ?? '',
+          lastName: apiData.lastName ?? '',
+          profileImage: imageUrl
+        });
       }
     };
 
     const fetchData = async () => {
       setIsFetching(true);
       setError(null);
-
       try {
-        // --- LOCAL DEVELOPMENT PATH ---
-        // Checks if you are running 'npm run dev'
         if (process.env.NODE_ENV === 'development') {
-          console.log('Running in local development mode...');
+          console.log('DEBUG: Running in local development mode...');
 
-          // Step 1: Get the access token from your local server.
+          console.log('DEBUG: Step 1 - Fetching access token from local server...');
           const tokenResponse = await fetch('http://localhost:3001/api/get-token', { method: 'POST' });
+
+          if (!tokenResponse.ok) {
+            throw new Error(`Local token server failed with status: ${tokenResponse.status}`);
+          }
+
           const { accessToken } = await tokenResponse.json();
+          console.log('DEBUG: Access token received successfully.');
 
           if (!accessToken) {
             throw new Error("Could not retrieve access token from local server.");
           }
 
-          // Step 2: Call the REAL Power Automate API with the token.
+          console.log('DEBUG: Step 2 - Calling Power Automate Flow API...');
           const realFlowUrl = 'https://prod-08.canadacentral.logic.azure.com:443/workflows/d3adf5457a224a6eb69fc1d4d08c27ca/triggers/manual/paths/invoke?api-version=2016-06-01';
 
           const flowResponse = await fetch(realFlowUrl, {
@@ -361,25 +385,26 @@ export default function SettingsForm() {
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({ "userid": "5bd4fe4a-bc54-f011-bec2-000d3af32e79" })
-            // body: JSON.stringify({ "userid": "241e9862-1c20-f011-998a-6045bd5dca91" })
           });
 
+          if (!flowResponse.ok) {
+            throw new Error(`Power Automate Flow API failed with status: ${flowResponse.status}`);
+          }
+          console.log('DEBUG: Power Automate Flow API call successful.');
+
           const apiData = await flowResponse.json();
+          console.log("DEBUG: Received data from Flow:", apiData);
           populateStates(apiData);
 
         } else {
           console.log("DEBUG: Running in Power Pages mode.");
-
-          if (typeof window.shell === 'undefined' || typeof window.shell.ajaxSafePost === 'undefined') {
-            throw new Error("window.shell.ajaxSafePost is not available. Cannot fetch data.");
+          if (typeof window.shell === 'undefined') {
+            throw new Error("window.shell is not available.");
           }
-          console.log("DEBUG: window.shell.ajaxSafePost is available.");
 
-          const payload = { eventData: JSON.stringify({}) };
           const apiUrl = "/_api/cloudflow/v1.0/trigger/d3a75ec3-9a6c-f011-b4cc-6045bd5dca91";
-          
-          console.log("DEBUG: Calling Power Pages API at:", apiUrl);
-          const response = await window.shell.ajaxSafePost({ type: 'POST', url: apiUrl, data: payload });
+
+          const response = await window.shell.ajaxSafePost({ type: 'POST', url: apiUrl, data: { eventData: JSON.stringify({}) } });
 
           let apiData;
           // Power Pages might return a string or an object. Handle both cases.
@@ -394,12 +419,10 @@ export default function SettingsForm() {
           } else {
             console.log("DEBUG: Response is an object.");
             apiData = response;
-          }
-          
-          populateStates(apiData);
+          } populateStates(apiData);
         }
       } catch (err) {
-        console.error("Error fetching settings:", err);
+        console.error("DEBUG: CATCH BLOCK - An error occurred during fetchData:", err);
         setError("Failed to load your settings. Please try refreshing the page.");
       } finally {
         setIsFetching(false);
@@ -409,13 +432,14 @@ export default function SettingsForm() {
     fetchData();
   }, [setUser]);
 
+
   const handleInputChange = useCallback((field: keyof UserFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   }, []);
 
-  const handleLanguageSelectionChange = useCallback((languages: string[]) => {
-    handleInputChange('languages', languages)
-  }, [handleInputChange])
+  const handleLanguageSelectionChange = useCallback((languages: LanguageOption[]) => {
+    handleInputChange('languages', languages);
+  }, [handleInputChange]);
 
   // FIXED: Image error handlers
   const handleImageError = useCallback(() => {
@@ -429,6 +453,12 @@ export default function SettingsForm() {
   }, []);
   const handleBusinessAddressChange = useCallback((field: keyof BusinessAddress, value: string) => {
     setBusinessAddress(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  }, []);
+  const handleLicensingInfoChange = useCallback((field: keyof LicensingInfo, value: string | number) => {
+    setLicensingInfo(prev => ({
       ...prev,
       [field]: value
     }));
@@ -478,7 +508,18 @@ export default function SettingsForm() {
 
     setIsSaving(true);
     setError(null);
+    const languageCodes = formData.languages.map(lang => lang.code).join(',');
+    // const languageCodes = formData.languages.map(lang => Number(lang.code));
 
+    // Helper to extract raw base64 data from a data URL
+    const getBase64Data = (dataUrl: string) => {
+      if (dataUrl && dataUrl.startsWith('data:image/')) {
+        return dataUrl.split(',')[1];
+      }
+      // Return an empty string if it's a path like '/default-avatar.png'
+      return '';
+    };
+    const rawBase64Image = getBase64Data(formData.profileImage);
     // Construct the payload based on your API schema
     const payload = {
       userid: "5bd4fe4a-bc54-f011-bec2-000d3af32e79", // Placeholder for local dev
@@ -490,13 +531,18 @@ export default function SettingsForm() {
       street: businessAddress.street,
       city: businessAddress.city,
       zipCode: businessAddress.zipCode,
-      aptUnit: businessAddress.aptUnit
+      aptUnit: businessAddress.aptUnit,
+      yearsInPractice: Number(licensingInfo.yearsInPractice),
+      profileImage: rawBase64Image, // Add raw base64 image,
+      languages: languageCodes, // Send the comma-separated string of CODES
+
+
     };
 
     try {
       if (process.env.NODE_ENV === 'development') {
         console.log('Saving in local development mode...');
-
+        console.log('DEBUG: Payload being sent:', payload);
         const tokenResponse = await fetch('http://localhost:3001/api/get-token', { method: 'POST' });
         const { accessToken } = await tokenResponse.json();
 
@@ -525,7 +571,12 @@ export default function SettingsForm() {
           street: businessAddress.street,
           city: businessAddress.city,
           zipCode: businessAddress.zipCode,
-          aptUnit: businessAddress.aptUnit
+          aptUnit: businessAddress.aptUnit,
+          yearsInPractice: Number(licensingInfo.yearsInPractice),
+          profileImage: rawBase64Image, // Add raw base64 image
+          languages: languageCodes, // Send the comma-separated string of CODES
+
+
         };
         if (typeof window.shell === 'undefined') {
           throw new Error("Cannot save outside of Power Pages.");
@@ -554,16 +605,26 @@ export default function SettingsForm() {
   };
 
   const biographyCharCount = formData.biography.length
-  const maxBiographyLength = 500
+  const maxBiographyLength = 2000
 
-  if (isFetching) {
+  if (isFetching ) {
     return (
       <div className="flex justify-center items-center min-h-screen" style={{ backgroundColor: '#efefef' }}>
         <Loader2 className="w-12 h-12 animate-spin" style={{ color: '#a4262c' }} />
       </div>
     );
   }
-
+if (isSaving) {
+  return (
+    <div 
+      className="flex justify-center items-center min-h-screen" 
+      // Change the background color to an rgba value
+      style={{ backgroundColor: 'rgba(239, 239, 239, 0.7)' }}
+    >
+      <Loader2 className="w-12 h-12 animate-spin" style={{ color: '#a4262cff' }} />
+    </div>
+  );
+}
   if (error && !isSaving) {
     return (
       <div className="flex flex-col justify-center items-center min-h-screen text-center p-4" style={{ backgroundColor: '#efefef' }}>
@@ -577,12 +638,18 @@ export default function SettingsForm() {
     );
   }
 
+  // Add this function to handle navigation
+  const handleNavigateToServices = () => {
+    // Replace with your actual navigation logic, e.g. using window.location or a router
+    window.location.href = '/Practitioner-Services';
+  };
+
   return (
     <form onSubmit={handleSave} className="w-full max-w-4xl mx-auto flex flex-col gap-6">
       <div className="flex justify-end">
         <Button
           type="button"
-          // onClick={handleNavigateToServices}
+          onClick={handleNavigateToServices}
           className="text-white bg-[#a4262c] hover:bg-[#a4262c]/90"
         >
           <Settings className="w-4 h-4 mr-2" />
@@ -666,9 +733,15 @@ export default function SettingsForm() {
             <Label htmlFor="available" className="text-sm font-medium cursor-pointer" style={{ color: '#011d41' }}>Currently available for new clients</Label>
           </div>
           <div className="space-y-3">
-            <Label className="text-sm font-medium" style={{ color: '#011d41' }}>Languages You Can Speak <span style={{ color: '#a4262c' }}>*</span></Label>
-            <MultiSelect options={AVAILABLE_LANGUAGES} selected={formData.languages} onSelectionChange={handleLanguageSelectionChange} placeholder="Select languages you can speak..." />
+            <Label>Languages You Can Speak <span style={{ color: '#a4262c' }}>*</span></Label>
+            <MultiSelect
+              options={availableLanguages}
+              selected={formData.languages}
+              onSelectionChange={handleLanguageSelectionChange}
+              placeholder="Select languages you can speak..."
+            />
           </div>
+
           <div className="space-y-2">
             <Label htmlFor="biography" className="text-sm font-medium" style={{ color: '#011d41' }}>Professional Biography</Label>
             <Textarea id="biography" value={formData.biography} onChange={(e) => handleInputChange('biography', e.target.value)} rows={4} maxLength={maxBiographyLength} className="resize-none transition-colors focus:ring-2" style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties} placeholder="Tell us about your professional background and expertise..." />
@@ -820,8 +893,15 @@ export default function SettingsForm() {
               <Label htmlFor="isLawyer" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>I am a Lawyer</Label>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="yearsInPractice" className="text-sm font-medium" style={{ color: '#011d41', opacity: 0.8 }}>Years in Practice</Label>
-              <Input id="yearsInPractice" value={licensingInfo.yearsInPractice} className="text-gray-700" style={{ backgroundColor: '#efefef' }} readOnly />
+              <Label htmlFor="yearsInPractice" className="text-sm font-medium" style={{ color: '#011d41' }}>Years in Practice</Label>
+              <Input
+                id="yearsInPractice"
+                type="number"
+                value={licensingInfo.yearsInPractice}
+                onChange={(e) => handleLicensingInfoChange('yearsInPractice', e.target.value)}
+                className="transition-colors focus:ring-2"
+                style={{ borderColor: '#efefef', '--tw-ring-color': '#a4262c' } as React.CSSProperties}
+              />
             </div>
           </div>
         </CardContent>
