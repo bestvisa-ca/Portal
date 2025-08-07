@@ -5,7 +5,7 @@
 # These folders contain all the packages your project needs to run.
 # They are installed automatically via 'npm install' and should never be committed.
 node_modules/
-pages/
+pages
 # Build output
 # -------------------------------------------------------------------
 # This is the folder where the final, optimized version of your app is placed

@@ -1,10 +1,11 @@
-import SettingsPage from './pages/SettingsPage'; 
+import PractitionerServicesPage from './site-pages/PractitionerServicesPage';
+// import SettingsPage from './site-pages/SettingsPage'; 
 
 function App() {
 
   return (
     <div>
-      <SettingsPage />
+      <PractitionerServicesPage />
 
     </div>
   )

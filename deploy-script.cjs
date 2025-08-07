@@ -7,9 +7,10 @@ const webFilesDir = path.resolve(__dirname, 'pages/back-office-portal/web-files/
 const assetsDir = path.resolve(__dirname, './dist/assets');
 
 // Define the full destination FILE paths
-const destJsPath = path.join(webFilesDir, 'pr-settings.js');
-const destCssPath = path.join(webFilesDir, 'pr-settings.css');
-
+// const destJsPath = path.join(webFilesDir, 'pr-settings.js');
+// const destCssPath = path.join(webFilesDir, 'pr-settings.css');
+const destJsPath = path.join(webFilesDir, 'pr-services.js');
+const destCssPath = path.join(webFilesDir, 'pr-services.css');
 console.log(`Source assets directory: ${assetsDir}`);
 console.log(`Destination JS file path: ${destJsPath}`);
 console.log(`Destination CSS file path: ${destCssPath}`);
