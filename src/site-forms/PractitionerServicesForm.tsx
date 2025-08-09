@@ -85,12 +85,26 @@ const API_URLS = {
     }
 };
 
-const LOCAL_DEV_USER_ID = "241e9862-1c20-f011-998a-6045bd5dca91";
+const LOCAL_DEV_USER_ID = "c2c2de7e-8968-f011-bec3-6045bd619595";
 // We will check for the existence of 'window.shell' to determine the environment.
 const isLocalDevelopment = typeof window.shell === 'undefined';
 
 
-export default function PractitionerServicesForm() {
+export default function PractitionerServicesForm({
+    onDataLoaded,
+    onTabChange,
+    activeTab,
+    showTitle = true // Add this new prop with a default value
+}: {
+    onDataLoaded?: (tabNames: string[]) => void;
+    onTabChange?: (tabName: string) => void;
+    activeTab?: string;
+    showTitle?: boolean; // Add to the type definition
+}) {
+
+
+
+
     const [isLoading, setIsLoading] = useState(true);
     // Renamed for clarity: This state is only for the "General Info" section
     const [isGeneralSaving, setIsGeneralSaving] = useState(false);
@@ -161,7 +175,12 @@ export default function PractitionerServicesForm() {
         }
 
         setServicesByCategory(groupedServices);
-    }, [setUser]);
+        if (onDataLoaded) {
+            const tabNames = ['general', ...categoryOrder.filter(cat => groupedServices[cat])];
+            onDataLoaded(tabNames);
+        }
+
+    }, [setUser, onDataLoaded]);
     const fetchAllData = useCallback(async () => {
         setIsLoading(true);
         try {
@@ -203,11 +222,11 @@ export default function PractitionerServicesForm() {
                 processServiceData(JSON.parse(servicesResponse));
 
                 // --- 2. Fetch Additional Info (This part was missing) ---
-                const additionalPayload={
+                const additionalPayload = {
                     "reason": "get",
                     "specialty": "",
                     "freeconsultation": false,
-                    "consultationrate":0,
+                    "consultationrate": 0,
                     "hourlyrate": 0
                 }
 
@@ -380,15 +399,23 @@ export default function PractitionerServicesForm() {
 
     return (
         <div className="relative">
-            <h1 className="text-2xl font-bold tracking-tight mb-6" style={{ color: '#011d41' }}>
-                Manage your Services and Prices
-            </h1>
+            {showTitle && (
+                <div className="mb-6">
+                    <h1 className="text-2xl font-bold tracking-tight" style={{ color: '#011d41' }}>
+                        Manage your Services and Prices
+                    </h1>
+                    <p className="text-sm text-gray-600 mt-2">
+                        <strong>Notice:</strong> Service details and pricing are used internally for matching and offer generation; they are not visible to clients and can be adjusted before sending an offer.
+                    </p>
+                </div>
+            )}
+
             {isGeneralSaving && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80">
                     <Loader2 className="h-12 w-12 animate-spin text-[#a4262c]" />
                 </div>
             )}
-            <Tabs defaultValue="general" className="w-full">
+            <Tabs value={activeTab} onValueChange={onTabChange} className="w-full">
                 <div className="relative w-full overflow-x-auto">
                     <TabsList className="h-auto flex-wrap justify-start border-b border-gray-200">
                         {
