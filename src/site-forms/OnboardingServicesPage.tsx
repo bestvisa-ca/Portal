@@ -5,6 +5,7 @@ import PractitionerServicesForm from './PractitionerServicesForm'; // Adjust pat
 import { Loader2, Check } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { OnboardingLayout } from './OnboardingLayout';
+import { toast } from 'sonner'; // We'll need toast for validation messages
 
 
 
@@ -17,6 +18,10 @@ const ONBOARDING_API_URLS = {
     continue: {
         powerpages: '/_api/cloudflow/v1.0/trigger/48150300-3d37-f011-8c4e-002248ad99ee',
         local: 'https://prod-05.canadacentral.logic.azure.com:443/workflows/c99377c56e3c4dd7b3e65b38b5940eb1/triggers/manual/paths/invoke?api-version=2016-06-01'
+    },
+       additionalInfo: {
+        powerpages: "/_api/cloudflow/v1.0/trigger/7ec0661b-4c57-f011-bec2-6045bd619595",
+        local: "https://prod-04.canadacentral.logic.azure.com:443/workflows/adc8a835237742bdb81f4819dccd78a7/triggers/manual/paths/invoke?api-version=2016-06-01"
     }
 };
 
@@ -26,6 +31,17 @@ const isLocalDevelopment = typeof window.shell === 'undefined';
 
 export default function OnboardingServicesPage() {
 
+    const [additionalInfo, setAdditionalInfo] = useState({
+        specialty: '',
+        freeConsultation: false,
+        consultationRate: '',
+        hourlyRate: '',
+    });
+    const [isGeneralSaving, setIsGeneralSaving] = useState(false);
+    // New state to track if the initial save has happened.
+    const [hasGeneralInfoBeenSaved, setHasGeneralInfoBeenSaved] = useState(false);
+
+
     const [isLoading, setIsLoading] = useState(true);
     const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set());
     const [allTabNames, setAllTabNames] = useState<string[]>([]);
@@ -33,50 +49,84 @@ export default function OnboardingServicesPage() {
     const [activeTab, setActiveTab] = useState('general');
 
 
-    useEffect(() => {
-        const checkOnboardingStep = async () => {
-            try {
-                let data;
+useEffect(() => {
+    const checkOnboardingStepAndFetchData = async () => {
+        try {
+            let stepData;
+            // First, check the user's onboarding step
+            if (isLocalDevelopment) {
+                const tokenResponse = await fetch('http://localhost:3001/api/get-token', { method: 'POST' });
+                const { accessToken } = await tokenResponse.json();
+                if (!accessToken) throw new Error("Could not retrieve access token.");
 
-                if (isLocalDevelopment) {
-                    console.log("Checking onboarding step in local dev mode...");
-                    const tokenResponse = await fetch('http://localhost:3001/api/get-token', { method: 'POST' });
-                    const { accessToken } = await tokenResponse.json();
-                    if (!accessToken) throw new Error("Could not retrieve access token.");
+                const res = await fetch(ONBOARDING_API_URLS.stepCheck.local, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userid: LOCAL_DEV_USER_ID })
+                });
+                stepData = await res.json();
+            } else {
+                const response = await window.shell.ajaxSafePost({ type: 'POST', url: ONBOARDING_API_URLS.stepCheck.powerpages, data: { eventData: JSON.stringify({}) } });
+                stepData = JSON.parse(response);
+            }
+            
+            const status = stepData.status || 0;
 
-                    const res = await fetch(ONBOARDING_API_URLS.stepCheck.local, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ userid: LOCAL_DEV_USER_ID })
-                    });
-                    data = await res.json();
-                } else {
-                    const response = await window.shell.ajaxSafePost({ type: 'POST', url: ONBOARDING_API_URLS.stepCheck.powerpages, data: { eventData: JSON.stringify({}) } });
-                    data = JSON.parse(response);
-                }
-
-                const status = data.status || 0;
-
+            // Redirect if the user is not on the correct step
+            if (status !== 1) {
                 switch (status) {
                     case 0: window.location.href = '/practitioner-onboarding'; break;
-                    case 1: setIsLoading(false); break;
                     case 2: window.location.href = '/onboarding-membership'; break;
                     case 3: window.location.href = '/onboarding-payment/'; break;
                     case 4: window.location.href = '/practitioner-dashboard'; break;
-                    default: console.error('Invalid onboarding status:', status);
                 }
-            } catch (error) {
-                console.error('Error fetching onboarding step:', error);
-                alert('Error processing your request. Please try again later.');
-            } finally {
-                // This block will ALWAYS run, whether the API call succeeded or failed.
-                // This guarantees the loading spinner will always be turned off.
-                setIsLoading(false);
+                return; // Stop execution if redirecting
             }
-        };
 
-        checkOnboardingStep();
-    }, []);
+            // --- If on the correct step, now fetch the additional info for the parent's state ---
+            let infoData;
+            if (isLocalDevelopment) {
+                const tokenResponse = await fetch('http://localhost:3001/api/get-token', { method: 'POST' });
+                const { accessToken } = await tokenResponse.json();
+                if (!accessToken) throw new Error("Could not retrieve access token.");
+
+                 const infoResponse = await fetch(ONBOARDING_API_URLS.additionalInfo.local, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason: 'get', userid: LOCAL_DEV_USER_ID })
+                });
+                infoData = await infoResponse.json();
+            } else {
+                                  const infoPayload = {
+                    "reason": "get",
+                    "specialty": "",
+                    "freeconsultation": false,
+                    "consultationrate": 0,
+                    "hourlyrate": 0
+                };
+                const infoResponse = await window.shell.ajaxSafePost({ type: 'POST', url: ONBOARDING_API_URLS.additionalInfo.powerpages, data: { eventData: JSON.stringify(infoPayload) } });
+                infoData = JSON.parse(infoResponse);
+            }
+
+            if (infoData.message === 'success' && infoData.additionalinfo) {
+                setAdditionalInfo({
+                    specialty: infoData.additionalinfo.specialty || '',
+                    freeConsultation: infoData.additionalinfo.freeconsultation === 'True' || infoData.additionalinfo.freeconsultation === true,
+                    consultationRate: infoData.additionalinfo.consultationrate || '',
+                    hourlyRate: infoData.additionalinfo.hourlyrate || '',
+                });
+            }
+
+        } catch (error) {
+            console.error('Error during initial data load:', error);
+            alert('Error processing your request. Please try again later.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    checkOnboardingStepAndFetchData();
+}, []);
 
     const handleDataLoaded = useCallback((tabNames: string[]) => {
         setAllTabNames(tabNames);
@@ -84,11 +134,78 @@ export default function OnboardingServicesPage() {
             setVisitedTabs(prev => new Set(prev).add(tabNames[0]));
         }
     }, []);
+    // --- LOGIC LIFTED UP FROM THE FORM ---
+    // This function now updates the state that lives in this parent component.
+    const handleInfoInputChange = (field: keyof typeof additionalInfo, value: string | boolean) => {
+        setAdditionalInfo(prev => ({ ...prev, [field]: value }));
+    };
+    // This is the save function, now part of the parent. It returns true/false for success/failure.
 
-    const handleTabChange = useCallback((tabName: string) => {
-        setActiveTab(tabName);
-        setVisitedTabs(prev => new Set(prev).add(tabName));
-    }, []);
+const handleSaveGeneralInfo = async (): Promise<boolean> => {
+    if (!additionalInfo.specialty.trim() || !additionalInfo.consultationRate || !additionalInfo.hourlyRate) {
+        toast.error("Please fill all required General Information fields.");
+        return false;
+    }
+    setIsGeneralSaving(true);
+    try {
+        const payload = {
+            reason: 'update',
+            specialty: additionalInfo.specialty,
+            freeconsultation: additionalInfo.freeConsultation,
+            consultationrate: parseFloat(String(additionalInfo.consultationRate)),
+            hourlyrate: parseFloat(String(additionalInfo.hourlyRate))
+        };
+        
+        // This block now correctly handles both environments
+        if (isLocalDevelopment) {
+            const tokenResponse = await fetch('http://localhost:3001/api/get-token', { method: 'POST' });
+            const { accessToken } = await tokenResponse.json();
+            if (!accessToken) throw new Error("Could not retrieve access token.");
+
+            const localPayload = { ...payload, userid: LOCAL_DEV_USER_ID };
+            await fetch(ONBOARDING_API_URLS.additionalInfo.local, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(localPayload)
+            });
+        } else {
+            await window.shell.ajaxSafePost({ type: 'POST', url: ONBOARDING_API_URLS.additionalInfo.powerpages, data: { eventData: JSON.stringify(payload) } });
+        }
+        
+        toast.success("General information has been saved successfully!");
+        setHasGeneralInfoBeenSaved(true);
+        return true;
+    } catch (error) {
+        console.error("Error saving general info:", error);
+        toast.error("Failed to save general information.");
+        return false;
+    } finally {
+        setIsGeneralSaving(false);
+    }
+};
+        // --- NEW "SMART NAVIGATION" LOGIC ---
+    // This function decides whether to navigate or force a save.
+    const requestNavigation = async (targetTab: string) => {
+        // If we are currently on the 'general' tab and trying to leave for the first time...
+        if (activeTab === 'general' && targetTab !== 'general' && !hasGeneralInfoBeenSaved) {
+            toast.info("Saving your general information before you proceed...");
+            const isSaveSuccessful = await handleSaveGeneralInfo();
+            
+            // Only navigate away if the automatic save was successful.
+            if (isSaveSuccessful) {
+                setActiveTab(targetTab);
+                setVisitedTabs(prev => new Set(prev).add(targetTab));
+            }
+        } else {
+            // Otherwise, if we're not on the general tab or it's already been saved, navigate freely.
+            setActiveTab(targetTab);
+            setVisitedTabs(prev => new Set(prev).add(targetTab));
+        }
+    };
+    // const handleTabChange = useCallback((tabName: string) => {
+    //     setActiveTab(tabName);
+    //     setVisitedTabs(prev => new Set(prev).add(tabName));
+    // }, []);
 
     const continueToMembership = async () => {
         setIsSubmitting(true);
@@ -129,20 +246,15 @@ export default function OnboardingServicesPage() {
     // const allTabsVisited = allTabNames.length > 0 && visitedTabs.size === allTabNames.length;
     const isFinalStepReached = activeTab === allTabNames[allTabNames.length - 1] && allTabNames.length > 0;
 
-
     if (isLoading) {
         return <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"><Loader2 className="h-10 w-10 animate-spin text-[#a4262c]" /></div>;
     }
-
     return (
 
         <OnboardingLayout>
-            {/* The main container still ensures a full-screen background */}
-        <div className="bg-[#efefef] min-h-screen flex justify-center items-start p-4 md:p-8">
-            <div className="bg-white p-4 md:p-8 rounded-lg shadow-lg max-w-7xl w-full flex flex-col h-full max-h-[95vh]" style={{ paddingBottom: '4rem' }}>
-
-                    {/* TOP SLICE: This part does not grow or scroll. */}
-                <div className="flex-shrink-0">
+            <div className="bg-[#efefef] min-h-screen flex justify-center items-start p-4 md:p-8">
+                <div className="bg-white p-4 md:p-8 rounded-lg shadow-lg max-w-7xl w-full flex flex-col h-full max-h-[95vh]">
+                    <div className="flex-shrink-0">
                     <h1 className="text-3xl md:text-4xl font-bold text-center mb-4" style={{ color: '#011d41' }}>
                         Manage Your Services and Prices
                     </h1>
@@ -159,10 +271,14 @@ export default function OnboardingServicesPage() {
                     <div className="flex-grow overflow-y-auto border-t pt-4">
                         <PractitionerServicesForm
                             onDataLoaded={handleDataLoaded}
-                            onTabChange={handleTabChange}
+                            onTabChange={requestNavigation} // Tab clicks also use the smart navigation
                             activeTab={activeTab}
-                            // Add this line to hide the title in the onboarding context
                             showTitle={false}
+                            // Pass down all the state and handlers for the General Info section
+                            additionalInfo={additionalInfo}
+                            onAdditionalInfoChange={handleInfoInputChange}
+                            onSaveGeneralInfo={handleSaveGeneralInfo}
+                            isGeneralSaving={isGeneralSaving}
                         />
                     </div>
                     {/* NEW: The Milestone Bar */}
@@ -177,7 +293,7 @@ export default function OnboardingServicesPage() {
                                 <div key={tabName} className="flex items-center w-full">
                                     <div className="flex flex-col items-center text-center">
                                         <button
-                                            onClick={() => handleTabChange(tabName)}
+                                            onClick={() => requestNavigation(tabName)}
                                             className={`flex items-center justify-center w-8 h-8 md:w-10 md:h-10 border-2 rounded-full transition-all duration-300
                                                 ${isActive ? 'bg-[#a4262c] border-[#a4262c] text-white' : ''}
                                                 ${isCompleted && !isActive ? 'bg-gray-200 border-gray-200' : ''}
