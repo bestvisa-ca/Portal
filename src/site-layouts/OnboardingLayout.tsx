@@ -1,6 +1,6 @@
 // OnboardingLayout.tsx
 
-import { UserProvider } from './UserContext'; // Adjust path if needed
+import { UserProvider } from '../site-contexts/UserContext'; // Adjust path if needed
 import { Toaster } from "../../src/components/ui/sonner"; // Optional: if you want notifications
 import { OnboardingNavbar } from './OnboardingNavbar'; // Adjust path if needed
 

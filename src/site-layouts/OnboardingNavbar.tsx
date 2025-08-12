@@ -11,22 +11,16 @@ import {
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import { cn } from '../lib/utils';
-import { useUser } from './UserContext'; // Import the new hook
+import { useUser } from '../site-contexts/UserContext'; // Import the new hook
+
+// Define the type for navigation links
+type NavSubLink = { href: string; label: string };
+type NavLink = { href: string; label: string; subLinks?: NavSubLink[] };
 
 // You can manage your navigation links in a structured way like this
-const navLinks = [
-  { href: "/", label: "Home" },
-  {
-    label: "Practitioner Dashboard",
-    subLinks: [
-      { href: "/Practitioner-Dashboard/", label: "Dashboard" },
-      { href: "/Practitioner-Dashboard/Practitioner-Requests/", label: "Practitioner Requests" },
-      { href: "/Practitioner-Dashboard/Practitioner-Offers/", label: "Practitioner Offers" },
-      { href: "/Practitioner-Dashboard/Practitioner-Cases/", label: "Practitioner Cases" },
-      { href: "/Practitioner-Dashboard/Practitioner-Financial/", label: "Practitioner Financial" },
-      { href: "/Practitioner-Dashboard/Practitioner-Settings/", label: "Practitioner Settings" },
-    ]
-  },
+const navLinks: NavLink[] = [
+  { href: "/practitioner-onboarding", label: "Home" },
+
 ];
 
 const NavLink = ({ href, children }: { href: string; children: React.ReactNode }) => (
@@ -54,12 +48,11 @@ const NavDropdown = ({ label, subLinks }: { label: string; subLinks: { href: str
   </DropdownMenu>
 );
 
-export function Navbar() {
+export function OnboardingNavbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user } = useUser(); // Get user data from the context
 
   const userName = user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : 'Profile';
-
   return (
     <nav className="bg-white text-[#011d41] shadow-sm w-full border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4">

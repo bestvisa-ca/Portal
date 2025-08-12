@@ -11,16 +11,22 @@ import {
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import { cn } from '../lib/utils';
-import { useUser } from '../site-forms/UserContext'; // Import the new hook
-
-// Define the type for navigation links
-type NavSubLink = { href: string; label: string };
-type NavLink = { href: string; label: string; subLinks?: NavSubLink[] };
+import { useUser } from '../site-contexts/UserContext'; // Import the new hook
 
 // You can manage your navigation links in a structured way like this
-const navLinks: NavLink[] = [
-  { href: "/practitioner-onboarding", label: "Home" },
-
+const navLinks = [
+  { href: "/", label: "Home" },
+  {
+    label: "Practitioner Dashboard",
+    subLinks: [
+      { href: "/Practitioner-Dashboard/", label: "Dashboard" },
+      { href: "/Practitioner-Dashboard/Practitioner-Requests/", label: "Practitioner Requests" },
+      { href: "/Practitioner-Dashboard/Practitioner-Offers/", label: "Practitioner Offers" },
+      { href: "/Practitioner-Dashboard/Practitioner-Cases/", label: "Practitioner Cases" },
+      { href: "/Practitioner-Dashboard/Practitioner-Financial/", label: "Practitioner Financial" },
+      { href: "/Practitioner-Dashboard/Practitioner-Settings/", label: "Practitioner Settings" },
+    ]
+  },
 ];
 
 const NavLink = ({ href, children }: { href: string; children: React.ReactNode }) => (
@@ -48,7 +54,7 @@ const NavDropdown = ({ label, subLinks }: { label: string; subLinks: { href: str
   </DropdownMenu>
 );
 
-export function SimpleNavbar() {
+export function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user } = useUser(); // Get user data from the context
 

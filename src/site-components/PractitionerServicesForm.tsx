@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useUser } from './UserContext';
+import { useUser } from '../site-contexts/UserContext';
 import { toast } from 'sonner';
 import { Loader2, Pencil, Plus, X } from 'lucide-react';
 import { Button } from '../components/ui/button';

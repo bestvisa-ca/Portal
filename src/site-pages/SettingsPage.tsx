@@ -1,5 +1,5 @@
-import SettingsForm from "../site-forms/SettingsForm";
-import { AppLayout } from '../site-forms/AppLayout';
+import SettingsForm from "../site-components/SettingsForm";
+import { AppLayout } from '../site-components/AppLayout';
 
 const SettingsPage = () => {
   return (

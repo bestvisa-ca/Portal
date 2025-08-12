@@ -1,7 +1,7 @@
 import { Navbar } from './Navbar';
 import { Sidebar } from './practitioner-sidebar';
-import { UserProvider } from './UserContext'; // Import the provider
-import { Toaster } from "../../src/components/ui/sonner" 
+import { UserProvider } from '../site-contexts/UserContext'; // Import the provider
+import { Toaster } from "../components/ui/sonner"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   return (

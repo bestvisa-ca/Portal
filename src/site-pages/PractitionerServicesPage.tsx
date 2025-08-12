@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import PractitionerServicesForm from "../site-forms/PractitionerServicesForm"; // Adjust path if needed
-import { AppLayout } from '../site-forms/AppLayout'; // Adjust path if needed
+import PractitionerServicesForm from "../site-components/PractitionerServicesForm"; // Adjust path if needed
+import { AppLayout } from '../site-components/AppLayout'; // Adjust path if needed
 
 const PractitionerServicesPage = () => {
   // 1. Add state to manage the active tab, defaulting to 'general'.

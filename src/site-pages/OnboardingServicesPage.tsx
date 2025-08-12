@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import PractitionerServicesForm from './PractitionerServicesForm'; // Adjust path if needed
+import PractitionerServicesForm from '../site-components/PractitionerServicesForm'; // Adjust path if needed
 import { Loader2, Check } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { OnboardingLayout } from './OnboardingLayout';
+import { OnboardingLayout } from '../site-layouts/OnboardingLayout';
 import { toast } from 'sonner'; // We'll need toast for validation messages
 
 
@@ -19,7 +19,7 @@ const ONBOARDING_API_URLS = {
         powerpages: '/_api/cloudflow/v1.0/trigger/48150300-3d37-f011-8c4e-002248ad99ee',
         local: 'https://prod-05.canadacentral.logic.azure.com:443/workflows/c99377c56e3c4dd7b3e65b38b5940eb1/triggers/manual/paths/invoke?api-version=2016-06-01'
     },
-       additionalInfo: {
+    additionalInfo: {
         powerpages: "/_api/cloudflow/v1.0/trigger/7ec0661b-4c57-f011-bec2-6045bd619595",
         local: "https://prod-04.canadacentral.logic.azure.com:443/workflows/adc8a835237742bdb81f4819dccd78a7/triggers/manual/paths/invoke?api-version=2016-06-01"
     }
@@ -49,84 +49,84 @@ export default function OnboardingServicesPage() {
     const [activeTab, setActiveTab] = useState('general');
 
 
-useEffect(() => {
-    const checkOnboardingStepAndFetchData = async () => {
-        try {
-            let stepData;
-            // First, check the user's onboarding step
-            if (isLocalDevelopment) {
-                const tokenResponse = await fetch('http://localhost:3001/api/get-token', { method: 'POST' });
-                const { accessToken } = await tokenResponse.json();
-                if (!accessToken) throw new Error("Could not retrieve access token.");
+    useEffect(() => {
+        const checkOnboardingStepAndFetchData = async () => {
+            try {
+                let stepData;
+                // First, check the user's onboarding step
+                if (isLocalDevelopment) {
+                    const tokenResponse = await fetch('http://localhost:3001/api/get-token', { method: 'POST' });
+                    const { accessToken } = await tokenResponse.json();
+                    if (!accessToken) throw new Error("Could not retrieve access token.");
 
-                const res = await fetch(ONBOARDING_API_URLS.stepCheck.local, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userid: LOCAL_DEV_USER_ID })
-                });
-                stepData = await res.json();
-            } else {
-                const response = await window.shell.ajaxSafePost({ type: 'POST', url: ONBOARDING_API_URLS.stepCheck.powerpages, data: { eventData: JSON.stringify({}) } });
-                stepData = JSON.parse(response);
-            }
-            
-            const status = stepData.status || 0;
-
-            // Redirect if the user is not on the correct step
-            if (status !== 1) {
-                switch (status) {
-                    case 0: window.location.href = '/practitioner-onboarding'; break;
-                    case 2: window.location.href = '/onboarding-membership'; break;
-                    case 3: window.location.href = '/onboarding-payment/'; break;
-                    case 4: window.location.href = '/practitioner-dashboard'; break;
+                    const res = await fetch(ONBOARDING_API_URLS.stepCheck.local, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userid: LOCAL_DEV_USER_ID })
+                    });
+                    stepData = await res.json();
+                } else {
+                    const response = await window.shell.ajaxSafePost({ type: 'POST', url: ONBOARDING_API_URLS.stepCheck.powerpages, data: { eventData: JSON.stringify({}) } });
+                    stepData = JSON.parse(response);
                 }
-                return; // Stop execution if redirecting
+
+                const status = stepData.status || 0;
+
+                // Redirect if the user is not on the correct step
+                if (status !== 1) {
+                    switch (status) {
+                        case 0: window.location.href = '/practitioner-onboarding'; break;
+                        case 2: window.location.href = '/onboarding-membership'; break;
+                        case 3: window.location.href = '/onboarding-payment/'; break;
+                        case 4: window.location.href = '/practitioner-dashboard'; break;
+                    }
+                    return; // Stop execution if redirecting
+                }
+
+                // --- If on the correct step, now fetch the additional info for the parent's state ---
+                let infoData;
+                if (isLocalDevelopment) {
+                    const tokenResponse = await fetch('http://localhost:3001/api/get-token', { method: 'POST' });
+                    const { accessToken } = await tokenResponse.json();
+                    if (!accessToken) throw new Error("Could not retrieve access token.");
+
+                    const infoResponse = await fetch(ONBOARDING_API_URLS.additionalInfo.local, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ reason: 'get', userid: LOCAL_DEV_USER_ID })
+                    });
+                    infoData = await infoResponse.json();
+                } else {
+                    const infoPayload = {
+                        "reason": "get",
+                        "specialty": "",
+                        "freeconsultation": false,
+                        "consultationrate": 0,
+                        "hourlyrate": 0
+                    };
+                    const infoResponse = await window.shell.ajaxSafePost({ type: 'POST', url: ONBOARDING_API_URLS.additionalInfo.powerpages, data: { eventData: JSON.stringify(infoPayload) } });
+                    infoData = JSON.parse(infoResponse);
+                }
+
+                if (infoData.message === 'success' && infoData.additionalinfo) {
+                    setAdditionalInfo({
+                        specialty: infoData.additionalinfo.specialty || '',
+                        freeConsultation: infoData.additionalinfo.freeconsultation === 'True' || infoData.additionalinfo.freeconsultation === true,
+                        consultationRate: infoData.additionalinfo.consultationrate || '',
+                        hourlyRate: infoData.additionalinfo.hourlyrate || '',
+                    });
+                }
+
+            } catch (error) {
+                console.error('Error during initial data load:', error);
+                alert('Error processing your request. Please try again later.');
+            } finally {
+                setIsLoading(false);
             }
+        };
 
-            // --- If on the correct step, now fetch the additional info for the parent's state ---
-            let infoData;
-            if (isLocalDevelopment) {
-                const tokenResponse = await fetch('http://localhost:3001/api/get-token', { method: 'POST' });
-                const { accessToken } = await tokenResponse.json();
-                if (!accessToken) throw new Error("Could not retrieve access token.");
-
-                 const infoResponse = await fetch(ONBOARDING_API_URLS.additionalInfo.local, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ reason: 'get', userid: LOCAL_DEV_USER_ID })
-                });
-                infoData = await infoResponse.json();
-            } else {
-                                  const infoPayload = {
-                    "reason": "get",
-                    "specialty": "",
-                    "freeconsultation": false,
-                    "consultationrate": 0,
-                    "hourlyrate": 0
-                };
-                const infoResponse = await window.shell.ajaxSafePost({ type: 'POST', url: ONBOARDING_API_URLS.additionalInfo.powerpages, data: { eventData: JSON.stringify(infoPayload) } });
-                infoData = JSON.parse(infoResponse);
-            }
-
-            if (infoData.message === 'success' && infoData.additionalinfo) {
-                setAdditionalInfo({
-                    specialty: infoData.additionalinfo.specialty || '',
-                    freeConsultation: infoData.additionalinfo.freeconsultation === 'True' || infoData.additionalinfo.freeconsultation === true,
-                    consultationRate: infoData.additionalinfo.consultationrate || '',
-                    hourlyRate: infoData.additionalinfo.hourlyrate || '',
-                });
-            }
-
-        } catch (error) {
-            console.error('Error during initial data load:', error);
-            alert('Error processing your request. Please try again later.');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    checkOnboardingStepAndFetchData();
-}, []);
+        checkOnboardingStepAndFetchData();
+    }, []);
 
     const handleDataLoaded = useCallback((tabNames: string[]) => {
         setAllTabNames(tabNames);
@@ -141,56 +141,56 @@ useEffect(() => {
     };
     // This is the save function, now part of the parent. It returns true/false for success/failure.
 
-const handleSaveGeneralInfo = async (): Promise<boolean> => {
-    if (!additionalInfo.specialty.trim() || !additionalInfo.consultationRate || !additionalInfo.hourlyRate) {
-        toast.error("Please fill all required General Information fields.");
-        return false;
-    }
-    setIsGeneralSaving(true);
-    try {
-        const payload = {
-            reason: 'update',
-            specialty: additionalInfo.specialty,
-            freeconsultation: additionalInfo.freeConsultation,
-            consultationrate: parseFloat(String(additionalInfo.consultationRate)),
-            hourlyrate: parseFloat(String(additionalInfo.hourlyRate))
-        };
-        
-        // This block now correctly handles both environments
-        if (isLocalDevelopment) {
-            const tokenResponse = await fetch('http://localhost:3001/api/get-token', { method: 'POST' });
-            const { accessToken } = await tokenResponse.json();
-            if (!accessToken) throw new Error("Could not retrieve access token.");
-
-            const localPayload = { ...payload, userid: LOCAL_DEV_USER_ID };
-            await fetch(ONBOARDING_API_URLS.additionalInfo.local, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(localPayload)
-            });
-        } else {
-            await window.shell.ajaxSafePost({ type: 'POST', url: ONBOARDING_API_URLS.additionalInfo.powerpages, data: { eventData: JSON.stringify(payload) } });
+    const handleSaveGeneralInfo = async (): Promise<boolean> => {
+        if (!additionalInfo.specialty.trim() || !additionalInfo.consultationRate || !additionalInfo.hourlyRate) {
+            toast.error("Please fill all required General Information fields.");
+            return false;
         }
-        
-        toast.success("General information has been saved successfully!");
-        setHasGeneralInfoBeenSaved(true);
-        return true;
-    } catch (error) {
-        console.error("Error saving general info:", error);
-        toast.error("Failed to save general information.");
-        return false;
-    } finally {
-        setIsGeneralSaving(false);
-    }
-};
-        // --- NEW "SMART NAVIGATION" LOGIC ---
+        setIsGeneralSaving(true);
+        try {
+            const payload = {
+                reason: 'update',
+                specialty: additionalInfo.specialty,
+                freeconsultation: additionalInfo.freeConsultation,
+                consultationrate: parseFloat(String(additionalInfo.consultationRate)),
+                hourlyrate: parseFloat(String(additionalInfo.hourlyRate))
+            };
+
+            // This block now correctly handles both environments
+            if (isLocalDevelopment) {
+                const tokenResponse = await fetch('http://localhost:3001/api/get-token', { method: 'POST' });
+                const { accessToken } = await tokenResponse.json();
+                if (!accessToken) throw new Error("Could not retrieve access token.");
+
+                const localPayload = { ...payload, userid: LOCAL_DEV_USER_ID };
+                await fetch(ONBOARDING_API_URLS.additionalInfo.local, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(localPayload)
+                });
+            } else {
+                await window.shell.ajaxSafePost({ type: 'POST', url: ONBOARDING_API_URLS.additionalInfo.powerpages, data: { eventData: JSON.stringify(payload) } });
+            }
+
+            toast.success("General information has been saved successfully!");
+            setHasGeneralInfoBeenSaved(true);
+            return true;
+        } catch (error) {
+            console.error("Error saving general info:", error);
+            toast.error("Failed to save general information.");
+            return false;
+        } finally {
+            setIsGeneralSaving(false);
+        }
+    };
+    // --- NEW "SMART NAVIGATION" LOGIC ---
     // This function decides whether to navigate or force a save.
     const requestNavigation = async (targetTab: string) => {
         // If we are currently on the 'general' tab and trying to leave for the first time...
         if (activeTab === 'general' && targetTab !== 'general' && !hasGeneralInfoBeenSaved) {
             toast.info("Saving your general information before you proceed...");
             const isSaveSuccessful = await handleSaveGeneralInfo();
-            
+
             // Only navigate away if the automatic save was successful.
             if (isSaveSuccessful) {
                 setActiveTab(targetTab);
@@ -255,14 +255,14 @@ const handleSaveGeneralInfo = async (): Promise<boolean> => {
             <div className="bg-[#efefef] min-h-screen flex justify-center items-start p-4 md:p-8">
                 <div className="bg-white p-4 md:p-8 rounded-lg shadow-lg max-w-7xl w-full flex flex-col h-full max-h-[95vh]">
                     <div className="flex-shrink-0">
-                    <h1 className="text-3xl md:text-4xl font-bold text-center mb-4" style={{ color: '#011d41' }}>
-                        Manage Your Services and Prices
-                    </h1>
-                    {/* CHANGE 2: The descriptive text has been updated. */}
-                    <p className="text-base md:text-lg text-center mb-6" style={{ color: '#011d41' }}>
-                        Use the tabs below to select and configure the services you want to offer. Services and prices are internal, hidden from clients, and editable in your offers.
-                    </p>
-                </div>
+                        <h1 className="text-3xl md:text-4xl font-bold text-center mb-4" style={{ color: '#011d41' }}>
+                            Manage Your Services and Prices
+                        </h1>
+                        {/* CHANGE 2: The descriptive text has been updated. */}
+                        <p className="text-base md:text-lg text-center mb-6" style={{ color: '#011d41' }}>
+                            Use the tabs below to select and configure the services you want to offer. Services and prices are internal, hidden from clients, and editable in your offers.
+                        </p>
+                    </div>
 
                     {/* FILLING: This is the scrollable content area.
                       - flex-grow: Tells this div to expand and fill all available vertical space.

@@ -22,7 +22,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '
 // RE-ADDED: AlertTriangle for the error UI.
 import { User, Building2, ShieldCheck, Upload, X, Check, ChevronsUpDown, Loader2, Settings, AlertTriangle } from 'lucide-react'
 import { cn } from '../lib/utils'
-import { useUser } from './UserContext'; // Import the hook
+import { useUser } from '../site-contexts/UserContext'; // Import the hook
 
 // TypeScript declaration for the window.shell object
 declare global {
