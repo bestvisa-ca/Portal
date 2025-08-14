@@ -1,6 +1,7 @@
-import PageTitle from '../site-components/ApplicantFinancial/PageTitle';
 import { WithSidebarToolbarLayout } from '../site-layouts/WithSidebarToolbarLayout';
-import { Wallet, FileText, CreditCard } from 'lucide-react';
+import PageTitle from '../site-components/ApplicantFinancial/PageTitle';
+import PaymentsPanel from '../site-components/ApplicantFinancial/PaymentsPanel';
+import { CreditCard, FileText, Wallet } from 'lucide-react';
 
 export default function ApplicantFinancialPage() {
   return (
@@ -22,12 +23,12 @@ export default function ApplicantFinancialPage() {
       defaultActiveKey="payments"
       renderContent={(activeKey) => {
         switch (activeKey) {
-          case 'wallet':
-            return <div>Wallet summary + ledger...</div>;
-          case 'invoices':
-            return <div>Invoices list...</div>;
           case 'payments':
-            return <div>Payments history...</div>;
+            return <PaymentsPanel />;
+          case 'invoices':
+            return <div>Invoices list…</div>;
+          case 'wallet':
+            return <div>Wallet summary + ledger…</div>;
           default:
             return null;
         }
